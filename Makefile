@@ -85,7 +85,14 @@ generate-integrations:
 	cp logo/usm.png ${INTEGRATIONS_DIR}/Linux/
 	mkdir -p ${INTEGRATIONS_DIR}/MacOS/USM.app/Contents/Resources
 	# Ensure .icns is named to match CFBundleIconFile (usm)
-	cp ${BUILD_DIR}/icons/usm.icns ${INTEGRATIONS_DIR}/MacOS/USM.app/Contents/Resources/usm.icns || echo "Warning: generated usm.icns not found"
+	@if [ -f ${BUILD_DIR}/icons/usm.icns ]; then \
+		cp ${BUILD_DIR}/icons/usm.icns ${INTEGRATIONS_DIR}/MacOS/USM.app/Contents/Resources/usm.icns; \
+	elif [ -f images/icon.icns ]; then \
+		echo "${GREEN}# Using fallback images/icon.icns...${NOCOLOR}"; \
+		cp images/icon.icns ${INTEGRATIONS_DIR}/MacOS/USM.app/Contents/Resources/usm.icns; \
+	else \
+		echo "Warning: no .icns available to copy"; \
+	fi
 
 build-with-integrations: build generate-integrations
 	@echo "${GREEN}# Copying binaries to integration directories...${NOCOLOR}"
@@ -142,18 +149,57 @@ help:
 	@echo "  VERSION                 - Set version for packages (default: git describe or 'dev')"
 
 .build-macos-icns:
-	@echo "${GREEN}# Building .icns from logo/usm.png...${NOCOLOR}"
+	@echo "${GREEN}# Building .icns from logo/usm.png (cross-platform)...${NOCOLOR}"
 	mkdir -p ${BUILD_DIR}/icons/usm.iconset
-	# Base sizes
-	sips -s format png -z 16 16 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_16x16.png >/dev/null
-	sips -s format png -z 32 32 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_16x16@2x.png >/dev/null
-	sips -s format png -z 32 32 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_32x32.png >/dev/null
-	sips -s format png -z 64 64 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_32x32@2x.png >/dev/null
-	sips -s format png -z 128 128 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_128x128.png >/dev/null
-	sips -s format png -z 256 256 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_128x128@2x.png >/dev/null
-	sips -s format png -z 256 256 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_256x256.png >/dev/null
-	sips -s format png -z 512 512 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_256x256@2x.png >/dev/null
-	sips -s format png -z 512 512 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_512x512.png >/dev/null
-	sips -s format png -z 1024 1024 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_512x512@2x.png >/dev/null
-	iconutil --convert icns ${BUILD_DIR}/icons/usm.iconset --output ${BUILD_DIR}/icons/usm.icns
-	@echo "${GREEN}# .icns generated at ${BUILD_DIR}/icons/usm.icns${NOCOLOR}"
+	# Generate iconset PNGs using sips (macOS) or ImageMagick convert (Linux/Windows)
+	@if command -v sips >/dev/null 2>&1; then \
+		echo "Using sips to generate iconset"; \
+		sips -s format png -z 16 16 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_16x16.png >/dev/null; \
+		sips -s format png -z 32 32 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_16x16@2x.png >/dev/null; \
+		sips -s format png -z 32 32 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_32x32.png >/dev/null; \
+		sips -s format png -z 64 64 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_32x32@2x.png >/dev/null; \
+		sips -s format png -z 128 128 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_128x128.png >/dev/null; \
+		sips -s format png -z 256 256 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_128x128@2x.png >/dev/null; \
+		sips -s format png -z 256 256 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_256x256.png >/dev/null; \
+		sips -s format png -z 512 512 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_256x256@2x.png >/dev/null; \
+		sips -s format png -z 512 512 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_512x512.png >/dev/null; \
+		sips -s format png -z 1024 1024 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_512x512@2x.png >/dev/null; \
+	else \
+		echo "Using ImageMagick convert to generate iconset"; \
+		if command -v magick >/dev/null 2>&1; then \
+			MAGICK=magick; \
+		else \
+			MAGICK=convert; \
+		fi; \
+		$$MAGICK logo/usm.png -resize 16x16 ${BUILD_DIR}/icons/usm.iconset/icon_16x16.png; \
+		$$MAGICK logo/usm.png -resize 32x32 ${BUILD_DIR}/icons/usm.iconset/icon_16x16@2x.png; \
+		$$MAGICK logo/usm.png -resize 32x32 ${BUILD_DIR}/icons/usm.iconset/icon_32x32.png; \
+		$$MAGICK logo/usm.png -resize 64x64 ${BUILD_DIR}/icons/usm.iconset/icon_32x32@2x.png; \
+		$$MAGICK logo/usm.png -resize 128x128 ${BUILD_DIR}/icons/usm.iconset/icon_128x128.png; \
+		$$MAGICK logo/usm.png -resize 256x256 ${BUILD_DIR}/icons/usm.iconset/icon_128x128@2x.png; \
+		$$MAGICK logo/usm.png -resize 256x256 ${BUILD_DIR}/icons/usm.iconset/icon_256x256.png; \
+		$$MAGICK logo/usm.png -resize 512x512 ${BUILD_DIR}/icons/usm.iconset/icon_256x256@2x.png; \
+		$$MAGICK logo/usm.png -resize 512x512 ${BUILD_DIR}/icons/usm.iconset/icon_512x512.png; \
+		$$MAGICK logo/usm.png -resize 1024x1024 ${BUILD_DIR}/icons/usm.iconset/icon_512x512@2x.png; \
+	fi
+	# Produce .icns using iconutil (macOS) or png2icns (Linux/Windows)
+	@if command -v iconutil >/dev/null 2>&1; then \
+		iconutil --convert icns ${BUILD_DIR}/icons/usm.iconset --output ${BUILD_DIR}/icons/usm.icns; \
+		echo "${GREEN}# .icns generated with iconutil at ${BUILD_DIR}/icons/usm.icns${NOCOLOR}"; \
+	elif command -v png2icns >/dev/null 2>&1; then \
+		echo "Using png2icns to build .icns"; \
+		png2icns ${BUILD_DIR}/icons/usm.icns \
+			${BUILD_DIR}/icons/usm.iconset/icon_16x16.png \
+			${BUILD_DIR}/icons/usm.iconset/icon_16x16@2x.png \
+			${BUILD_DIR}/icons/usm.iconset/icon_32x32.png \
+			${BUILD_DIR}/icons/usm.iconset/icon_32x32@2x.png \
+			${BUILD_DIR}/icons/usm.iconset/icon_128x128.png \
+			${BUILD_DIR}/icons/usm.iconset/icon_128x128@2x.png \
+			${BUILD_DIR}/icons/usm.iconset/icon_256x256.png \
+			${BUILD_DIR}/icons/usm.iconset/icon_256x256@2x.png \
+			${BUILD_DIR}/icons/usm.iconset/icon_512x512.png \
+			${BUILD_DIR}/icons/usm.iconset/icon_512x512@2x.png; \
+		echo "${GREEN}# .icns generated with png2icns at ${BUILD_DIR}/icons/usm.icns${NOCOLOR}"; \
+	else \
+		echo "Warning: neither iconutil nor png2icns found; skipping .icns generation"; \
+	fi
