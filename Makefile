@@ -78,11 +78,14 @@ build:
 generate-integrations:
 	@echo "${GREEN}# Generating desktop integration files...${NOCOLOR}"
 	go run scripts/gen-integrations.go -output ${INTEGRATIONS_DIR} -version ${VERSION}
+	@echo "${GREEN}# Generating macOS .icns from PNG (preserving transparency)...${NOCOLOR}"
+	${MAKE} .build-macos-icns
 	@echo "${GREEN}# Copying icon files...${NOCOLOR}"
 	mkdir -p ${INTEGRATIONS_DIR}/Linux
 	cp logo/usm.png ${INTEGRATIONS_DIR}/Linux/
-	mkdir -p ${INTEGRATIONS_DIR}/MacOS/USM.app/Resources
-	cp images/icon.icns ${INTEGRATIONS_DIR}/MacOS/USM.app/Resources/ || echo "Warning: icon.icns not found"
+	mkdir -p ${INTEGRATIONS_DIR}/MacOS/USM.app/Contents/Resources
+	# Ensure .icns is named to match CFBundleIconFile (usm)
+	cp ${BUILD_DIR}/icons/usm.icns ${INTEGRATIONS_DIR}/MacOS/USM.app/Contents/Resources/usm.icns || echo "Warning: generated usm.icns not found"
 
 build-with-integrations: build generate-integrations
 	@echo "${GREEN}# Copying binaries to integration directories...${NOCOLOR}"
@@ -137,3 +140,20 @@ help:
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  VERSION                 - Set version for packages (default: git describe or 'dev')"
+
+.build-macos-icns:
+	@echo "${GREEN}# Building .icns from logo/usm.png...${NOCOLOR}"
+	mkdir -p ${BUILD_DIR}/icons/usm.iconset
+	# Base sizes
+	sips -s format png -z 16 16 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_16x16.png >/dev/null
+	sips -s format png -z 32 32 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_16x16@2x.png >/dev/null
+	sips -s format png -z 32 32 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_32x32.png >/dev/null
+	sips -s format png -z 64 64 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_32x32@2x.png >/dev/null
+	sips -s format png -z 128 128 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_128x128.png >/dev/null
+	sips -s format png -z 256 256 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_128x128@2x.png >/dev/null
+	sips -s format png -z 256 256 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_256x256.png >/dev/null
+	sips -s format png -z 512 512 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_256x256@2x.png >/dev/null
+	sips -s format png -z 512 512 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_512x512.png >/dev/null
+	sips -s format png -z 1024 1024 logo/usm.png --out ${BUILD_DIR}/icons/usm.iconset/icon_512x512@2x.png >/dev/null
+	iconutil --convert icns ${BUILD_DIR}/icons/usm.iconset --output ${BUILD_DIR}/icons/usm.icns
+	@echo "${GREEN}# .icns generated at ${BUILD_DIR}/icons/usm.icns${NOCOLOR}"

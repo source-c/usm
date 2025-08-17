@@ -6,20 +6,23 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"text/template"
 )
 
 // Config holds the template variables for generating integration files
 type Config struct {
-	AppName      string
-	BinaryName   string
-	Description  string
-	Version      string
-	InstallPath  string
-	IconName     string
-	BundleID     string
-	Signature    string
-	MinOSVersion string
+	AppName       string
+	BinaryName    string
+	Description   string
+	Version       string
+	ShortVersion  string
+	BundleVersion string
+	InstallPath   string
+	IconName      string
+	BundleID      string
+	Signature     string
+	MinOSVersion  string
 }
 
 func main() {
@@ -30,16 +33,27 @@ func main() {
 	)
 	flag.Parse()
 
+	// Sanitize version values for macOS Info.plist requirements
+	// CFBundleShortVersionString: user-visible marketing version (e.g., 1.2.3)
+	// CFBundleVersion: build version, must contain only numbers and periods
+	versionPattern := regexp.MustCompile(`\d+(?:\.\d+){0,2}`)
+	marketingVersion := versionPattern.FindString(*version)
+	if marketingVersion == "" {
+		marketingVersion = "0.0.0"
+	}
+
 	config := Config{
-		AppName:      "USM",
-		BinaryName:   "usm",
-		Description:  "Simple, modern and privacy-focused secrets manager",
-		Version:      *version,
-		InstallPath:  *installPath,
-		IconName:     "usm",
-		BundleID:     "ai.z7.apps.usm",
-		Signature:    "USM!",
-		MinOSVersion: "10.15",
+		AppName:       "USM",
+		BinaryName:    "usm",
+		Description:   "Simple, modern and privacy-focused secrets manager",
+		Version:       *version,
+		ShortVersion:  marketingVersion,
+		BundleVersion: marketingVersion,
+		InstallPath:   *installPath,
+		IconName:      "usm",
+		BundleID:      "ai.z7.apps.usm",
+		Signature:     "USM!",
+		MinOSVersion:  "10.15",
 	}
 
 	if err := generateIntegrations(config, *outputDir); err != nil {
@@ -53,7 +67,7 @@ func generateIntegrations(config Config, outputDir string) error {
 	// Create output directories
 	linuxDir := filepath.Join(outputDir, "Linux")
 	macosDir := filepath.Join(outputDir, "MacOS", config.AppName+".app", "Contents")
-	macosResourcesDir := filepath.Join(outputDir, "MacOS", config.AppName+".app", "Resources")
+	macosResourcesDir := filepath.Join(outputDir, "MacOS", config.AppName+".app", "Contents", "Resources")
 	macosBinDir := filepath.Join(outputDir, "MacOS", config.AppName+".app", "Contents", "MacOS")
 
 	dirs := []string{linuxDir, macosDir, macosResourcesDir, macosBinDir}
