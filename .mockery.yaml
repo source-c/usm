@@ -1,0 +1,7 @@
+with-expecter: false
+all: true
+recursive: true
+dir: ./internal
+output: ./internal/mocks
+keeptree: true
+case: underscore

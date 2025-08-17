@@ -1,0 +1,6 @@
+/dist
+/fyne-cross
+/build
+/bin
+/.coverage.out
+/internal/mocks/

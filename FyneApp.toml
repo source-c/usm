@@ -1,0 +1,8 @@
+Website = "https://apps.z7.ai/usm-go"
+
+[Details]
+  Icon = "logo/usm.png"
+  Name = "USM"
+  ID = "ai.z7.apps.usm"
+  Version = "1.0.0"
+  Build = 1
