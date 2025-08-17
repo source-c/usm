@@ -3,16 +3,21 @@
 package agent
 
 import (
+	"context"
 	"net"
 	"time"
 )
 
 // dialWithTimeout dials the unix socket with a timeout
 func dialWithTimeout(socketPath string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("unix", socketPath, timeout)
+	d := &net.Dialer{Timeout: timeout}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return d.DialContext(ctx, "unix", socketPath)
 }
 
 // listen listens on the unix socket
 func listen(socketPath string) (net.Listener, error) {
-	return net.Listen("unix", socketPath)
+	var lc net.ListenConfig
+	return lc.Listen(context.Background(), "unix", socketPath)
 }

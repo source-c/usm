@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -31,7 +32,8 @@ func handleConnection(conn net.Conn) {
 // In the current implementation is used only to avoid starting multiple
 // instances of the app.
 func HealthService(lockFile string) (net.Listener, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	listener, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		log.Println("could not start health service:", err)
 		return nil, err
@@ -59,7 +61,10 @@ func HealthServiceCheck(lockFile string) bool {
 	if err != nil {
 		return false
 	}
-	conn, err := net.DialTimeout("tcp", string(address), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	d := &net.Dialer{Timeout: timeout}
+	conn, err := d.DialContext(ctx, "tcp", string(address))
 	if err != nil {
 		return false
 	}

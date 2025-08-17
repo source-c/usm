@@ -1,4 +1,4 @@
-.PHONY: default build generate-integrations build-with-integrations package-linux package-macos clean help
+.PHONY: default build generate-integrations build-with-integrations package-linux package-macos clean clean-all help
 #.SILENT:
 
 # COLORS.
@@ -27,10 +27,14 @@ clean:
 	$(RM) -r ${BUILD_DIR}
 	$(RM) -r ${MOCKS_DIR}
 
+clean-all: clean
+	$(RM) -r ${INTEGRATIONS_DIR}
+	$(RM) -r ${BIN}
+
 .build-mockery:
 	@if [ ! -f $(BIN)/mockery ]; then \
 		echo "${GREEN}# Installing mockery binary...${NOCOLOR}"; \
-		GOBIN=$(BIN) go install github.com/vektra/mockery/v2@v2.51.1; \
+		GOBIN=$(BIN) go install github.com/vektra/mockery/v2@v2.53.4; \
 	fi
 
 # Set which go files to ignore while testing.
