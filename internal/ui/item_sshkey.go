@@ -85,7 +85,7 @@ func (iw *sshItemWidget) Edit(ctx context.Context, key *usm.Key, w fyne.Window) 
 			Label: "Copy",
 			Icon:  theme.ContentCopyIcon(),
 			Action: func() {
-				w.Clipboard().SetContent(passphraseEntry.Text)
+				fyne.CurrentApp().Clipboard().SetContent(passphraseEntry.Text)
 				fyne.CurrentApp().SendNotification(&fyne.Notification{
 					Title:   "USM",
 					Content: "Passphrase copied to clipboard",
@@ -106,7 +106,7 @@ func (iw *sshItemWidget) Edit(ctx context.Context, key *usm.Key, w fyne.Window) 
 			Label: "Copy",
 			Icon:  theme.ContentCopyIcon(),
 			Action: func() {
-				w.Clipboard().SetContent(publicKeyEntry.Text)
+				fyne.CurrentApp().Clipboard().SetContent(publicKeyEntry.Text)
 				fyne.CurrentApp().SendNotification(&fyne.Notification{
 					Title:   "USM",
 					Content: "Public Key copied to clipboard",
@@ -172,7 +172,7 @@ func (iw *sshItemWidget) Edit(ctx context.Context, key *usm.Key, w fyne.Window) 
 			Label: "Copy",
 			Icon:  theme.ContentCopyIcon(),
 			Action: func() {
-				w.Clipboard().SetContent(privateKeyEntry.Text)
+				fyne.CurrentApp().Clipboard().SetContent(privateKeyEntry.Text)
 				fyne.CurrentApp().SendNotification(&fyne.Notification{
 					Title:   "USM",
 					Content: "Private Key copied to clipboard",

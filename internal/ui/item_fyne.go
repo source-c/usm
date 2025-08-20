@@ -192,7 +192,7 @@ func exportAction(filename string, data []byte, w fyne.Window) func() {
 
 func copyAction(label string, text string, w fyne.Window) func() {
 	return func() {
-		w.Clipboard().SetContent(text)
+		fyne.CurrentApp().Clipboard().SetContent(text)
 		fyne.CurrentApp().SendNotification(&fyne.Notification{
 			Title:   "USM",
 			Content: fmt.Sprintf("%s copied", label),

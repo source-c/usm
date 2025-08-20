@@ -82,7 +82,7 @@ func (iw *passwordItemWidget) Edit(ctx context.Context, key *usm.Key, w fyne.Win
 			Label: "Copy",
 			Icon:  theme.ContentCopyIcon(),
 			Action: func() {
-				w.Clipboard().SetContent(passwordEntry.Text)
+				fyne.CurrentApp().Clipboard().SetContent(passwordEntry.Text)
 				fyne.CurrentApp().SendNotification(&fyne.Notification{
 					Title:   "USM",
 					Content: "Password copied to clipboard",
