@@ -4,7 +4,7 @@ import "runtime"
 
 func newDefaultPreferences() *Preferences {
 	// Detect if running on macOS to set toolbar default
-	showToolbar := runtime.GOOS != "darwin"
+	showToolbar := runtime.GOOS == "darwin"
 
 	return &Preferences{
 		FaviconDownloader: FaviconDownloaderPreferences{

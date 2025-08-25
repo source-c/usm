@@ -46,6 +46,11 @@ make generate-integrations
 
 ```
 
+## Documentation
+
+- [Configuration Management](docs/configuration.md) - Versioned configuration system using Viracochan
+- [Desktop Integrations](docs/integrations.md) - Desktop integration file generation for Linux and macOS
+
 ## How it works - cryptography details
 
 ### Vault initialization
