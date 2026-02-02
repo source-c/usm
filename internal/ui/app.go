@@ -67,6 +67,10 @@ func MakeApp(s usm.Storage, w fyne.Window) fyne.CanvasObject {
 		currentTheme:  theme.DefaultTheme(),
 	}
 
+	if err = s.MigrateVaultCatalogue(); err != nil {
+		dialog.NewError(err, w)
+	}
+
 	// Apply default theme colour if set
 	a.applyThemeColour("")
 

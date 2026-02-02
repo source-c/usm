@@ -4,3 +4,7 @@
 /bin
 /.coverage.out
 /internal/mocks/
+/.vscode
+/.claude
+/.opencode
+/.junie

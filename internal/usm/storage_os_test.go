@@ -1,6 +1,7 @@
 package usm
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -126,4 +127,83 @@ func TestStorageOSDeleteVault(t *testing.T) {
 	// Assert vault root is gone
 	_, statErr := os.Stat(vaultRootPath(storage, name))
 	require.True(t, os.IsNotExist(statErr))
+}
+
+func TestChangeVaultPasswordReencryptsData(t *testing.T) {
+	name := "change-password"
+	oldPassword := "old-secret"
+	newPassword := "new-secret"
+
+	root, err := os.MkdirTemp(os.TempDir(), "usm")
+	require.NoError(t, err)
+	defer os.RemoveAll(root)
+
+	storage, err := NewOSStorageRooted(root)
+	require.NoError(t, err)
+
+	key, err := storage.CreateVaultKey(name, oldPassword)
+	require.NoError(t, err)
+	vault, err := storage.CreateVault(name, key)
+	require.NoError(t, err)
+
+	note := NewNote()
+	note.Name = "note"
+	note.Value = "secret"
+	require.NoError(t, vault.AddItem(note))
+	require.NoError(t, storage.StoreItem(vault, note))
+	require.NoError(t, storage.StoreVault(vault))
+
+	newVault, err := storage.ChangeVaultPassword(vault, oldPassword, newPassword)
+	require.NoError(t, err)
+	require.NotNil(t, newVault)
+	assert.Equal(t, vault.Size(), newVault.Size())
+	assert.NotEqual(t, vault.Key().Fingerprint(), newVault.Key().Fingerprint())
+
+	_, err = storage.LoadVaultKey(name, oldPassword)
+	assert.Error(t, err)
+
+	newKey, err := storage.LoadVaultKey(name, newPassword)
+	require.NoError(t, err)
+	reloadedVault, err := storage.LoadVault(name, newKey)
+	require.NoError(t, err)
+	require.Equal(t, vault.Size(), reloadedVault.Size())
+
+	meta := reloadedVault.ItemMetadata[note.Type][note.ID()]
+	require.NotNil(t, meta)
+	loadedItem, err := storage.LoadItem(reloadedVault, meta)
+	require.NoError(t, err)
+	assert.Equal(t, note.Value, loadedItem.(*Note).Value)
+
+	backupDir := fmt.Sprintf("%s.v1", vaultRootPath(storage, name))
+	info, statErr := os.Stat(backupDir)
+	require.NoError(t, statErr)
+	assert.True(t, info.IsDir())
+}
+
+func TestChangeVaultPasswordInvalidOldPassword(t *testing.T) {
+	name := "change-password-invalid"
+	oldPassword := "original"
+
+	root, err := os.MkdirTemp(os.TempDir(), "usm")
+	require.NoError(t, err)
+	defer os.RemoveAll(root)
+
+	storage, err := NewOSStorageRooted(root)
+	require.NoError(t, err)
+
+	key, err := storage.CreateVaultKey(name, oldPassword)
+	require.NoError(t, err)
+	vault, err := storage.CreateVault(name, key)
+	require.NoError(t, err)
+
+	note := NewNote()
+	note.Name = "note"
+	require.NoError(t, vault.AddItem(note))
+	require.NoError(t, storage.StoreVault(vault))
+
+	_, err = storage.ChangeVaultPassword(vault, "wrong", "new-pass")
+	require.Error(t, err)
+
+	_, err = storage.LoadVaultKey(name, oldPassword)
+	require.NoError(t, err)
 }

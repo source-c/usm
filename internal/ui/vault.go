@@ -548,9 +548,14 @@ func (a *app) showVaultSettingsDialog() {
 	// Create colour selection widget with current vault colour
 	colourWidget := a.makeColourSelectionWidget(a.vault.Colour)
 
+	changePasswordBtn := widget.NewButton("Change Password...", func() {
+		a.showChangePasswordDialog()
+	})
+
 	// Create form
 	form := container.NewVBox(
 		widget.NewCard("Vault Colour", "Choose a colour theme for this vault", colourWidget),
+		widget.NewCard("Security", "Change the vault master password", changePasswordBtn),
 	)
 
 	// Create dialog

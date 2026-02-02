@@ -134,6 +134,13 @@ func (s *OSStorage) LoadVault(name string, key *Key) (*Vault, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not read and decrypt the vault: %w", err)
 	}
+
+	if err := persistVaultCatalogue(s, vault, func(entry *VaultEntry) {
+		entry.LastUnlocked = time.Now().UTC()
+	}); err != nil {
+		return nil, err
+	}
+
 	return vault, nil
 }
 
@@ -150,6 +157,11 @@ func (s *OSStorage) StoreVault(vault *Vault) error {
 	if err != nil {
 		return fmt.Errorf("could not encrypt and store the vault: %w", err)
 	}
+
+	if err := persistVaultCatalogue(s, vault, nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -226,6 +238,85 @@ func (s *OSStorage) Vaults() ([]string, error) {
 	return vaults, nil
 }
 
+// ChangeVaultPassword re-encrypts all vault contents using a newly generated key protected by newPassword
+func (s *OSStorage) ChangeVaultPassword(vault *Vault, oldPassword string, newPassword string) (*Vault, error) {
+	if vault == nil {
+		return nil, errors.New("vault cannot be nil")
+	}
+	if vault.Name == "" {
+		return nil, errors.New("vault name cannot be empty")
+	}
+	if newPassword == "" {
+		return nil, errors.New("new password cannot be empty")
+	}
+	if oldPassword == newPassword {
+		return nil, errors.New("new password must differ from the old password")
+	}
+
+	// Ensure supplied old password is valid for the stored key
+	if _, err := s.LoadVaultKey(vault.Name, oldPassword); err != nil {
+		return nil, fmt.Errorf("invalid old password: %w", err)
+	}
+
+	items, err := loadVaultItems(s, vault)
+	if err != nil {
+		return nil, err
+	}
+
+	// ATTN: Moving the active vault directory to a backup must be atomic to avoid data loss
+	activeDir := vaultRootPath(s, vault.Name)
+	backupVersion := catalogueVaultVersion(s, vault.Name)
+	if backupVersion <= 0 {
+		backupVersion = 1
+	}
+	backupDir := fmt.Sprintf("%s.v%d", activeDir, backupVersion)
+
+	if err := os.Rename(activeDir, backupDir); err != nil {
+		return nil, fmt.Errorf("could not move vault to backup: %w", err)
+	}
+
+	restoreBackup := func() error {
+		_ = os.RemoveAll(activeDir)
+		return os.Rename(backupDir, activeDir)
+	}
+
+	newKey, err := s.CreateVaultKey(vault.Name, newPassword)
+	if err != nil {
+		_ = restoreBackup()
+		return nil, fmt.Errorf("could not create vault key with new password: %w", err)
+	}
+
+	newVault := NewVault(newKey, vault.Name)
+	newVault.Colour = vault.Colour
+	newVault.Version = vault.Version
+	newVault.Created = vault.Created
+	newVault.Modified = time.Now().UTC()
+
+	for _, item := range items {
+		if err := newVault.AddItem(item); err != nil {
+			_ = restoreBackup()
+			return nil, fmt.Errorf("could not add item to new vault: %w", err)
+		}
+		if err := s.StoreItem(newVault, item); err != nil {
+			_ = restoreBackup()
+			return nil, fmt.Errorf("could not store item into new vault: %w", err)
+		}
+	}
+
+	if err := s.StoreVault(newVault); err != nil {
+		_ = restoreBackup()
+		return nil, fmt.Errorf("could not store new vault: %w", err)
+	}
+
+	// Remove older backups if we only preserve the previous generation
+	if backupVersion > 1 {
+		oldBackupDir := fmt.Sprintf("%s.v%d", activeDir, backupVersion-1)
+		_ = os.RemoveAll(oldBackupDir)
+	}
+
+	return newVault, nil
+}
+
 // LoadAppState load the configuration from the underlying storage
 func (s *OSStorage) LoadAppState() (*AppState, error) {
 	defaultAppState := &AppState{
@@ -251,6 +342,10 @@ func (s *OSStorage) LoadAppState() (*AppState, error) {
 
 // StoreAppState store the configuration into the underlying storage
 func (s *OSStorage) StoreAppState(appState *AppState) error {
+	if err := mergeExistingCatalogue(s, appState); err != nil {
+		return err
+	}
+
 	appStateFile := appStateFilePath(s)
 	w, err := s.createFile(appStateFile)
 	if err != nil {
@@ -306,4 +401,9 @@ func (s *OSStorage) migrateDeprecatedRootStorage() (bool, error) {
 	dest := storageRootPath(s)
 	err = os.Rename(src, dest)
 	return true, err
+}
+
+// MigrateVaultCatalogue creates catalogue entries for vaults missing metadata
+func (s *OSStorage) MigrateVaultCatalogue() error {
+	return migrateVaultCatalogueEntries(s)
 }

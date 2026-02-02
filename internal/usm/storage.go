@@ -6,6 +6,7 @@ import (
 	"io"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 const (
@@ -27,6 +28,7 @@ type Storage interface {
 	LogStorage
 	SocketAgentPath() string
 	LockFilePath() string
+	MigrateVaultCatalogue() error
 }
 type AppStateStorage interface {
 	LoadAppState() (*AppState, error)
@@ -49,6 +51,8 @@ type VaultStorage interface {
 	StoreVault(vault *Vault) error
 	// Vaults returns the list of vault names from the storage
 	Vaults() ([]string, error)
+	// ChangeVaultPassword re-encrypts the vault data using a newly generated key derived from the provided password
+	ChangeVaultPassword(vault *Vault, oldPassword string, newPassword string) (*Vault, error)
 }
 
 type ItemStorage interface {
@@ -130,4 +134,167 @@ func decrypt(key *Key, r io.Reader, v interface{}) error {
 		return fmt.Errorf("could not decode content: %w", err)
 	}
 	return nil
+}
+
+func loadVaultItems(storage ItemStorage, vault *Vault) ([]Item, error) {
+	items := make([]Item, 0, vault.Size())
+	var loadErr error
+
+	vault.Range(func(id string, meta *Metadata) bool {
+		item, err := storage.LoadItem(vault, meta)
+		if err != nil {
+			loadErr = fmt.Errorf("could not load item %s: %w", id, err)
+			return false
+		}
+		items = append(items, item)
+		return true
+	})
+
+	return items, loadErr
+}
+
+func catalogueVaultVersion(storage Storage, vaultName string) int {
+	appState, err := storage.LoadAppState()
+	if err != nil || appState == nil {
+		return 1
+	}
+
+	if appState.VaultCatalogue == nil {
+		return 1
+	}
+
+	if entry, ok := appState.VaultCatalogue[vaultName]; ok && entry != nil && entry.Version > 0 {
+		return entry.Version
+	}
+
+	return 1
+}
+
+func persistVaultCatalogue(storage Storage, vault *Vault, mutate func(entry *VaultEntry)) error {
+	if vault == nil || vault.Name == "" {
+		return fmt.Errorf("vault is required to update catalogue")
+	}
+
+	appState, err := storage.LoadAppState()
+	if err != nil {
+		return fmt.Errorf("could not load app state: %w", err)
+	}
+
+	if appState.VaultCatalogue == nil {
+		appState.VaultCatalogue = make(map[string]*VaultEntry)
+	}
+
+	UpdateVaultCatalogue(appState.VaultCatalogue, vault, storage)
+
+	if mutate != nil {
+		if entry := appState.VaultCatalogue[vault.Name]; entry != nil {
+			mutate(entry)
+		}
+	}
+
+	appState.Modified = time.Now().UTC()
+	if err := storage.StoreAppState(appState); err != nil {
+		return fmt.Errorf("could not store app state: %w", err)
+	}
+
+	return nil
+}
+
+func migrateVaultCatalogueEntries(storage Storage) error {
+	appState, err := storage.LoadAppState()
+	if err != nil {
+		return fmt.Errorf("could not load app state: %w", err)
+	}
+
+	if appState.VaultCatalogue == nil {
+		appState.VaultCatalogue = make(map[string]*VaultEntry)
+	}
+
+	vaults, err := storage.Vaults()
+	if err != nil {
+		return fmt.Errorf("could not list vaults: %w", err)
+	}
+
+	now := time.Now().UTC()
+	updated := false
+
+	for _, name := range vaults {
+		if _, exists := appState.VaultCatalogue[name]; exists {
+			continue
+		}
+
+		appState.VaultCatalogue[name] = &VaultEntry{
+			Name:            name,
+			Version:         1,
+			StorageLocation: vaultRootPath(storage, name),
+			Created:         now,
+			Modified:        now,
+			ItemCount:       0,
+		}
+		updated = true
+	}
+
+	if !updated {
+		return nil
+	}
+
+	appState.Modified = now
+	if err := storage.StoreAppState(appState); err != nil {
+		return fmt.Errorf("could not store app state: %w", err)
+	}
+
+	return nil
+}
+
+func mergeExistingCatalogue(storage Storage, appState *AppState) error {
+	if appState == nil {
+		return fmt.Errorf("app state is required")
+	}
+
+	existing, err := storage.LoadAppState()
+	if err != nil {
+		return fmt.Errorf("could not load current app state: %w", err)
+	}
+
+	appState.VaultCatalogue = mergeCatalogueEntries(existing.VaultCatalogue, appState.VaultCatalogue)
+	return nil
+}
+
+func mergeCatalogueEntries(current, incoming map[string]*VaultEntry) map[string]*VaultEntry {
+	if current == nil {
+		return incoming
+	}
+
+	if incoming == nil {
+		incoming = make(map[string]*VaultEntry)
+	}
+
+	for name, entry := range current {
+		if entry == nil {
+			continue
+		}
+
+		if existing, ok := incoming[name]; !ok || catalogueEntryRecency(entry).After(catalogueEntryRecency(existing)) {
+			incoming[name] = entry
+		}
+	}
+
+	return incoming
+}
+
+func catalogueEntryRecency(entry *VaultEntry) time.Time {
+	if entry == nil {
+		return time.Time{}
+
+	}
+
+	ts := entry.Modified
+	if entry.Created.After(ts) {
+		ts = entry.Created
+	}
+	if entry.LastUnlocked.After(ts) {
+		ts = entry.LastUnlocked
+	}
+
+	return ts
 }

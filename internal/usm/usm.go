@@ -233,6 +233,13 @@ func (k *Key) Encrypt(dst io.Writer) (io.WriteCloser, error) {
 	return age.Encrypt(dst, k.ageIdentity.Recipient())
 }
 
+// Fingerprint returns a SHA256 hash for the public recipient used as key identifier
+func (k *Key) Fingerprint() string {
+	recipient := k.ageIdentity.Recipient().String()
+	hash := sha256.Sum256([]byte(recipient))
+	return fmt.Sprintf("%x", hash)
+}
+
 func (k *Key) MarshalJSON() ([]byte, error) {
 	return json.Marshal(k.ageIdentity.String())
 }

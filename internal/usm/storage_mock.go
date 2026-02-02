@@ -19,7 +19,8 @@ type StorageMock struct {
 	AppStateStorageMock
 	VaultStorageMock
 	ItemStorageMock
-	OnSocketAgentPath func() string
+	OnSocketAgentPath  func() string
+	OnMigrateCatalogue func() error
 }
 
 // LockFilePath implements Storage.
@@ -40,6 +41,14 @@ func (c *StorageMock) Root() string {
 // SocketAgentPath implements Storage.
 func (c *StorageMock) SocketAgentPath() string {
 	return filepath.Join(os.TempDir(), "usm_socket_agent_path_mock")
+}
+
+// MigrateVaultCatalogue implements Storage.
+func (c *StorageMock) MigrateVaultCatalogue() error {
+	if c.OnMigrateCatalogue == nil {
+		return nil
+	}
+	return c.OnMigrateCatalogue()
 }
 
 type AppStateStorageMock struct {
@@ -79,6 +88,8 @@ type VaultStorageMock struct {
 	OnStoreVault func(vault *Vault) error
 	// Vaults returns the list of vault names from the storage
 	OnVaults func() ([]string, error)
+	// ChangeVaultPassword re-encrypts the vault data using a newly generated key
+	OnChangeVaultPassword func(vault *Vault, oldPassword string, newPassword string) (*Vault, error)
 }
 
 // CreateVault implements VaultStorage.
@@ -135,6 +146,14 @@ func (c *VaultStorageMock) Vaults() ([]string, error) {
 		return nil, ErrCallbackRequired
 	}
 	return c.OnVaults()
+}
+
+// ChangeVaultPassword implements VaultStorage.
+func (c *VaultStorageMock) ChangeVaultPassword(vault *Vault, oldPassword string, newPassword string) (*Vault, error) {
+	if c.OnChangeVaultPassword == nil {
+		return nil, ErrCallbackRequired
+	}
+	return c.OnChangeVaultPassword(vault, oldPassword, newPassword)
 }
 
 type ItemStorageMock struct {
