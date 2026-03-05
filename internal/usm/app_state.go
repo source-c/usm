@@ -4,6 +4,8 @@ import "time"
 
 // AppState represents the application state
 type AppState struct {
+	// InstanceID uniquely identifies this USM installation for backup and sync purposes
+	InstanceID string `json:"instance_id,omitempty"`
 	// Modified is the last time the state was modified, example: preferences changed or vaults modified
 	Modified time.Time `json:"modified,omitempty"`
 	// Preferences contains the application preferences

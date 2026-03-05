@@ -45,6 +45,10 @@ func (h *ListItemsVaultHandler) Serve(res *Response, req *Request) {
 		res.Error = &InvalidRequestPayloadError{Got: req.Payload, Expected: v}
 		return
 	}
+	if err := validateVaultName(v.Vault); err != nil {
+		res.Error = err
+		return
+	}
 	s := h.Storage
 	c, err := agent.NewClient(s.SocketAgentPath())
 	if err != nil {

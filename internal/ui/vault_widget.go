@@ -42,6 +42,8 @@ func (uw *unlockerVaultWidget) unlock() {
 	}
 
 	key, err := uw.app.storage.LoadVaultKey(uw.vaultName, password)
+	// ATTN: clear password from widget memory as soon as it's no longer needed
+	uw.password.SetText("")
 	if err != nil {
 		var invalidPasswordError *age.NoIdentityMatchError
 		if errors.As(err, &invalidPasswordError) {

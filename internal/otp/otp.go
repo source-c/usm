@@ -5,6 +5,7 @@ package otp
 
 import (
 	"crypto/hmac"
+	"crypto/sha1" //nolint:gosec // SHA1 required by RFC4226 as default TOTP hash algorithm
 	"encoding/base32"
 	"encoding/binary"
 	"errors"
@@ -91,8 +92,12 @@ func HOTP(h func() hash.Hash, key []byte, count uint64, digits int) (string, err
 }
 
 // hmacGenerator generates the HMAC for the key and count using the specified algorithm.
+// If h is nil, defaults to SHA1 as per RFC4226.
 // Note: the key and count are hashed high-order byte first, see rfc4226#section-5.2
 func hmacGenerator(h func() hash.Hash, key []byte, count uint64) []byte {
+	if h == nil {
+		h = sha1.New
+	}
 	mac := hmac.New(h, key)
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, count)

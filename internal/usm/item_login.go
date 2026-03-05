@@ -93,8 +93,9 @@ func (u *LoginURL) Set(rawURL string) error {
 	tldPlusOne, err := publicsuffix.EffectiveTLDPlusOne(hostname)
 	if err != nil {
 		u.tldPlusOne = hostname
+	} else {
+		u.tldPlusOne = tldPlusOne
 	}
-	u.tldPlusOne = tldPlusOne
 	return nil
 }
 

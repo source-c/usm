@@ -326,6 +326,9 @@ func (s *OSStorage) LoadAppState() (*AppState, error) {
 	appStateFile := appStateFilePath(s)
 	r, err := os.Open(appStateFile) //nolint:gosec // appStateFile is application-controlled path
 	if os.IsNotExist(err) {
+		if err := ensureInstanceID(defaultAppState); err != nil {
+			return defaultAppState, fmt.Errorf("could not ensure instance ID: %w", err)
+		}
 		return defaultAppState, nil
 	}
 	if err != nil {
@@ -336,6 +339,9 @@ func (s *OSStorage) LoadAppState() (*AppState, error) {
 	err = json.NewDecoder(r).Decode(appState)
 	if err != nil {
 		return defaultAppState, err
+	}
+	if err := ensureInstanceID(appState); err != nil {
+		return appState, fmt.Errorf("could not ensure instance ID: %w", err)
 	}
 	return appState, nil
 }

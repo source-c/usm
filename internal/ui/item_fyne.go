@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"apps.z7.ai/usm/internal/icon"
 	"apps.z7.ai/usm/internal/usm"
@@ -190,13 +191,26 @@ func exportAction(filename string, data []byte, w fyne.Window) func() {
 	}
 }
 
+// clipboardClearTimeout is the duration after which the clipboard is cleared
+const clipboardClearTimeout = 30 * time.Second
+
 func copyAction(label string, text string, w fyne.Window) func() {
 	return func() {
-		fyne.CurrentApp().Clipboard().SetContent(text)
+		cb := fyne.CurrentApp().Clipboard()
+		cb.SetContent(text)
 		fyne.CurrentApp().SendNotification(&fyne.Notification{
 			Title:   "USM",
 			Content: fmt.Sprintf("%s copied", label),
 		})
+		// Auto-clear clipboard after timeout if content hasn't changed
+		go func() {
+			time.Sleep(clipboardClearTimeout)
+			if cb.Content() == text {
+				fyne.Do(func() {
+					cb.SetContent("")
+				})
+			}
+		}()
 	}
 }
 

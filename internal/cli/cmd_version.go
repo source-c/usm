@@ -45,6 +45,10 @@ func (cmd *VersionCmd) Parse(args []string) error {
 
 // Run runs the command
 func (cmd *VersionCmd) Run(s usm.Storage) error {
-	fmt.Printf("usm cli version %s\n", usm.Version())
+	fmt.Printf("usm version %s\n", usm.BuildInfo())
+	appState, err := s.LoadAppState()
+	if err == nil && appState.InstanceID != "" {
+		fmt.Printf("instance: %s\n", appState.InstanceID)
+	}
 	return nil
 }

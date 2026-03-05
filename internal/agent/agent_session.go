@@ -99,7 +99,7 @@ func (a *Agent) processSessionRequest(contents []byte) ([]byte, error) {
 			return nil, fmt.Errorf("invalid request")
 		}
 
-		buf := make([]byte, 2)
+		buf := make([]byte, 16)
 		if _, err := rand.Read(buf); err != nil {
 			return nil, err
 		}

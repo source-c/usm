@@ -17,6 +17,8 @@ import (
 
 func RandomWord() string {
 	buf := make([]byte, 2)
+	// ATTN: panic is intentional — crypto/rand.Read failing means the OS CSPRNG is broken.
+	// No password manager can operate securely without a working entropy source.
 	if _, err := rand.Read(buf); err != nil {
 		panic(err)
 	}

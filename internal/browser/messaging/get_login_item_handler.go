@@ -46,6 +46,10 @@ func (h *GetLoginItemHandler) Serve(res *Response, req *Request) {
 		res.Error = &InvalidRequestPayloadError{Got: req.Payload, Expected: v}
 		return
 	}
+	if err := validateVaultName(v.Vault); err != nil {
+		res.Error = err
+		return
+	}
 
 	if usm.ItemType(v.Type) != usm.LoginItemType {
 		res.Error = fmt.Errorf("invalid item type: expected %d (%s), got %d (%s)", v.Type, usm.LoginItemType, usm.ItemType(v.Type), usm.LoginItemType)

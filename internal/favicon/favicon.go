@@ -143,7 +143,7 @@ func makeRequest(ctx context.Context, client *http.Client, rawURL string) (*http
 	}
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("User-Agent", usm.UserAgentFaviconDownloader)
-	res, err := client.Do(req)
+	res, err := client.Do(req) //nolint:gosec // favicon fetching from user-provided URLs is intentional
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch URL: %w", err)
 	}

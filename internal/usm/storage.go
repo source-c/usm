@@ -1,6 +1,7 @@
 package usm
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -108,16 +109,48 @@ func logFilePath(s Storage) string {
 	return filepath.Join(s.Root(), logFileName)
 }
 
+// generateUUID returns a new random UUID v4 string
+func generateUUID() (string, error) {
+	var uuid [16]byte
+	if _, err := rand.Read(uuid[:]); err != nil {
+		return "", fmt.Errorf("could not generate instance ID: %w", err)
+	}
+	// Set version (4) and variant (RFC4122) bits
+	uuid[6] = (uuid[6] & 0x0f) | 0x40
+	uuid[8] = (uuid[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16]), nil
+}
+
+// ensureInstanceID assigns a new instance ID if one is not yet set.
+// The ID is set in memory and persisted on the next StoreAppState call.
+func ensureInstanceID(appState *AppState) error {
+	if appState.InstanceID != "" {
+		return nil
+	}
+	id, err := generateUUID()
+	if err != nil {
+		return err
+	}
+	appState.InstanceID = id
+	return nil
+}
+
 func encrypt(key *Key, w io.Writer, v interface{}) error {
 	encWriter, err := key.Encrypt(w)
 	if err != nil {
-		return fmt.Errorf("could not create encrypted writer for URI: %w", err)
+		return fmt.Errorf("could not create encrypted writer: %w", err)
 	}
-	defer encWriter.Close()
 
 	err = json.NewEncoder(encWriter).Encode(v)
 	if err != nil {
-		return fmt.Errorf("could not encode data for URI: %w", err)
+		encWriter.Close()
+		return fmt.Errorf("could not encode data: %w", err)
+	}
+
+	// ATTN: Close finalizes the age ciphertext; its error must be checked
+	if err := encWriter.Close(); err != nil {
+		return fmt.Errorf("could not finalize encryption: %w", err)
 	}
 
 	return nil
@@ -285,7 +318,6 @@ func mergeCatalogueEntries(current, incoming map[string]*VaultEntry) map[string]
 func catalogueEntryRecency(entry *VaultEntry) time.Time {
 	if entry == nil {
 		return time.Time{}
-
 	}
 
 	ts := entry.Modified

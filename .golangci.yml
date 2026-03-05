@@ -40,6 +40,10 @@ linters:
       - path: (.+)\.go$
         text: G104
       - path: (.+)\.go$
+        text: G115
+      - path: (.+)\.go$
+        text: G117
+      - path: (.+)\.go$
         text: SA1019
       - path: (.+)\.go$
         text: QF1008
@@ -72,7 +76,6 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(pkg.hiveon.dev)
         - alias
       custom-order: true
   exclusions:

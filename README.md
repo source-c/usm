@@ -51,6 +51,20 @@ make generate-integrations
 - [Configuration Management](docs/configuration.md) - Versioned configuration system using Viracochan
 - [Desktop Integrations](docs/integrations.md) - Desktop integration file generation for Linux and macOS
 
+## Build identification
+
+Each binary built via `make build` embeds version, build ID (git commit) and build time via linker flags.
+
+```
+$ usm cli version
+usm version v1.0.0 (abc1234 2026-03-05T12:00:00Z)
+instance: 550e8400-e29b-41d4-a716-446655440000
+```
+
+The **instance ID** is a UUID v4 generated on first run and persisted in the application state (`usm.json`). It uniquely identifies a USM installation for backup and synchronization purposes.
+
+When building outside of `make`, the version falls back to Go module metadata or `(unknown)`.
+
 ## How it works - cryptography details
 
 ### Vault initialization

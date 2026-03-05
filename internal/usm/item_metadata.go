@@ -32,10 +32,13 @@ type Metadata struct {
 
 func (m *Metadata) ID() string {
 	key := append([]byte(m.Type.String()), []byte(m.Name)...)
-	hash, err := blake2b.New256(key)
-	if err != nil {
-		panic(err)
+	// ATTN: blake2b keyed mode requires key <= 64 bytes;
+	// pre-hash to 32 bytes for long item names to avoid failure
+	if len(key) > 64 {
+		sum := blake2b.Sum256(key)
+		key = sum[:]
 	}
+	hash, _ := blake2b.New256(key)
 	return hex.EncodeToString(hash.Sum(nil))
 }
 

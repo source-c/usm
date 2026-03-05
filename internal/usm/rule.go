@@ -2,7 +2,6 @@ package usm
 
 import (
 	"bytes"
-	"fmt"
 )
 
 const (
@@ -78,7 +77,6 @@ func (r *Rule) Template() (string, error) {
 	var filtered bytes.Buffer
 	for _, b := range r.Tpl {
 		if pos := bytes.IndexByte(r.Filter, b); pos != -1 {
-			fmt.Printf("found %s\n", string(b))
 			continue
 		}
 		err := filtered.WriteByte(b)

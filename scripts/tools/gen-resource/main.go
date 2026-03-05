@@ -17,7 +17,7 @@ func encodeBytesAsGoByteSlice(b []byte) string {
 		if i%12 == 0 {
 			sb.WriteString("\n\t\t")
 		}
-		sb.WriteString(fmt.Sprintf("0x%02X,", by))
+		sb.WriteString(fmt.Sprintf("0x%02X,", by)) //nolint:staticcheck // hex literal formatting
 		if (i+1)%12 != 0 {
 			sb.WriteString(" ")
 		}

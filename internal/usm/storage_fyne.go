@@ -306,6 +306,9 @@ func (s *FyneStorage) LoadAppState() (*AppState, error) {
 	appStateFile := appStateFilePath(s)
 	uri := storage.NewFileURI(appStateFile)
 	if ok, _ := storage.Exists(uri); !ok {
+		if err := ensureInstanceID(defaultAppState); err != nil {
+			return defaultAppState, fmt.Errorf("could not ensure instance ID: %w", err)
+		}
 		return defaultAppState, nil
 	}
 	r, err := storage.Reader(uri)
@@ -317,6 +320,9 @@ func (s *FyneStorage) LoadAppState() (*AppState, error) {
 	err = json.NewDecoder(r).Decode(appState)
 	if err != nil {
 		return defaultAppState, err
+	}
+	if err := ensureInstanceID(appState); err != nil {
+		return appState, fmt.Errorf("could not ensure instance ID: %w", err)
 	}
 	return appState, nil
 }

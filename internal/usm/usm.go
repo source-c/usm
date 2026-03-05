@@ -26,8 +26,12 @@ const (
 	UserAgentFaviconDownloader = "usm/1.0 (+https://apps.z7.ai/usm-go)"
 )
 
-// BuildVersion allow to set the version at link time
-var BuildVersion string
+// Build metadata — set at link time via -ldflags -X
+var (
+	BuildVersion string
+	BuildID      string
+	BuildTime    string
+)
 
 type Ruler interface {
 	Template() (string, error)
@@ -98,7 +102,7 @@ func MakeKey(password string, w io.Writer) (key *Key, err error) {
 	}()
 	e, err := age.Encrypt(a, ageScryptRecipient)
 	if err != nil {
-		err = wrapErr(ierr)
+		err = wrapErr(err)
 		return
 	}
 
@@ -109,12 +113,12 @@ func MakeKey(password string, w io.Writer) (key *Key, err error) {
 
 	_, err = e.Write(data.Bytes())
 	if err != nil {
-		err = wrapErr(ierr)
+		err = wrapErr(err)
 		return
 	}
 	err = e.Close()
 	if err != nil {
-		err = wrapErr(ierr)
+		err = wrapErr(err)
 		return
 	}
 
@@ -182,6 +186,8 @@ func (k *Key) Secret(seeder Seeder) (string, error) {
 	salt := seeder.Salt()
 	if salt == nil {
 		salt = make([]byte, hash().Size())
+		// ATTN: panic is intentional — crypto/rand.Read failing means the OS CSPRNG is broken.
+		// Continuing with a predictable salt would silently compromise all generated secrets.
 		if _, err := rand.Read(salt); err != nil {
 			panic(err)
 		}
@@ -190,7 +196,7 @@ func (k *Key) Secret(seeder Seeder) (string, error) {
 	// decode the age identity to be used as secret for HKDF function
 	_, data, err := bech32.Decode(k.ageIdentity.String())
 	if err != nil {
-		panic(fmt.Sprintf("could not decode the age identity %s", err))
+		return "", fmt.Errorf("could not decode the age identity: %w", err)
 	}
 
 	// reader to derive a key
@@ -201,10 +207,16 @@ func (k *Key) Secret(seeder Seeder) (string, error) {
 	}
 
 	chars := []byte(template)
+	if len(chars) == 0 {
+		return "", fmt.Errorf("empty character template for secret generation")
+	}
 
+	// ATTN: limit iterations to prevent infinite loop when HKDF output rarely matches the character template.
+	// With a reasonable template, the probability of needing more than seeder.Len()*256 reads is negligible.
+	maxIterations := seeder.Len() * 256
 	var secret bytes.Buffer
-	for {
-		buf := make([]byte, 1) // TODO define max len attempts
+	for i := 0; i < maxIterations; i++ {
+		buf := make([]byte, 1)
 		_, err := io.ReadFull(reader, buf)
 		if err != nil {
 			return "", err
@@ -216,11 +228,11 @@ func (k *Key) Secret(seeder Seeder) (string, error) {
 
 		secret.WriteByte(buf[0])
 		if secret.Len() == seeder.Len() {
-			break
+			return secret.String(), nil
 		}
 	}
 
-	return secret.String(), nil
+	return "", fmt.Errorf("secret generation exceeded maximum iterations (%d)", maxIterations)
 }
 
 // Decrypt decrypts the message
@@ -273,6 +285,22 @@ func Version() string {
 		return info.Main.Version
 	}
 	return "(unknown)"
+}
+
+// BuildInfo returns a human-readable build identification string
+func BuildInfo() string {
+	v := Version()
+	if BuildID != "" || BuildTime != "" {
+		parts := []string{}
+		if BuildID != "" {
+			parts = append(parts, BuildID)
+		}
+		if BuildTime != "" {
+			parts = append(parts, BuildTime)
+		}
+		return v + " (" + strings.Join(parts, " ") + ")"
+	}
+	return v
 }
 
 // ServiceVersion returns the USM's service version

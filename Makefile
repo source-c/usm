@@ -17,6 +17,11 @@ MOCKS_DIR := $(CURDIR)/internal/mocks
 
 DEFAULT_TARGET ?= $(BUILD_DIR)/usm
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_ID ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+LDFLAGS := -X apps.z7.ai/usm/internal/usm.BuildVersion=$(VERSION) \
+           -X apps.z7.ai/usm/internal/usm.BuildID=$(BUILD_ID) \
+           -X apps.z7.ai/usm/internal/usm.BuildTime=$(BUILD_TIME)
 
 default: clean lint build
 	@:
@@ -73,7 +78,7 @@ generate-mocks: .build-mockery
 
 build:
 	@echo "${GREEN}# Building all binaries...${NOCOLOR}"
-	go build -o ${DEFAULT_TARGET} ./main.go
+	go build -ldflags '$(LDFLAGS)' -o ${DEFAULT_TARGET} ./main.go
 
 generate-integrations:
 	@echo "${GREEN}# Generating desktop integration files...${NOCOLOR}"
@@ -128,7 +133,7 @@ package-macos: build-with-integrations
 
 fmt: .build-fmt-tools
 	@echo "${GREEN}# Running gci fmt${NOCOLOR}"
-	gci write --skip-generated -s standard -s default -s 'prefix(pkg.hiveon.dev)' -s alias --custom-order .
+	gci write --skip-generated -s standard -s default -s alias --custom-order .
 	@echo "${GREEN}# Running gofumpt${NOCOLOR}"
 	gofumpt -w -l .
 
@@ -147,6 +152,8 @@ help:
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  VERSION                 - Set version for packages (default: git describe or 'dev')"
+	@echo "  BUILD_ID                - Build identifier (default: git short commit hash)"
+	@echo "  BUILD_TIME              - Build timestamp (default: current UTC time)"
 
 .build-macos-icns:
 	@echo "${GREEN}# Building .icns from logo/usm.png (cross-platform)...${NOCOLOR}"

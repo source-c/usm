@@ -3,9 +3,24 @@ package messaging
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var ErrInvalidMessageLenght = errors.New("invalid message lenght")
+
+// validateVaultName rejects vault names that could cause path traversal or are otherwise invalid
+func validateVaultName(name string) error {
+	if name == "" {
+		return errors.New("vault name cannot be empty")
+	}
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+		return errors.New("vault name contains invalid characters")
+	}
+	if name == "." {
+		return errors.New("vault name contains invalid characters")
+	}
+	return nil
+}
 
 type ActionNotRegisteredError struct {
 	Action uint32

@@ -66,6 +66,9 @@ func (sk sshkey) MarshalPrivateKey() []byte {
 	case *ed25519.PrivateKey:
 		var err error
 		pemBlock, err = ssh.MarshalPrivateKey(*v, "")
+		// ATTN: panic is intentional — MarshalPrivateKey only receives keys validated by
+		// newSSHKeyFromPrivateKey (ed25519/RSA). A marshaling failure here indicates a stdlib
+		// bug or memory corruption; the application must not continue in that state.
 		if err != nil {
 			panic("could not marshal SSH private key:" + err.Error())
 		}
@@ -80,6 +83,9 @@ func (sk sshkey) MarshalPrivateKey() []byte {
 
 func (sk sshkey) PublicKey() ssh.PublicKey {
 	sshPublicKey, err := ssh.NewPublicKey(sk.publicKey)
+	// ATTN: panic is intentional — publicKey is derived from a validated private key's .Public()
+	// method (ed25519/RSA only). ssh.NewPublicKey supports both types, so failure here is an
+	// invariant violation that must not be silently ignored.
 	if err != nil {
 		panic("could not generate ssh public key from the crypto public key")
 	}
