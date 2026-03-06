@@ -376,6 +376,16 @@ func (s *OSStorage) LogFilePath() string {
 	return logFilePath(s)
 }
 
+// PeerKeyPath return the peer key file path
+func (s *OSStorage) PeerKeyPath() string {
+	return peerKeyPath(s)
+}
+
+// TrustedPeersPath return the trusted peers file path
+func (s *OSStorage) TrustedPeersPath() string {
+	return trustedPeersPath(s)
+}
+
 func (s *OSStorage) isExist(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)

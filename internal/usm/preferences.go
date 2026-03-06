@@ -39,6 +39,9 @@ func newDefaultPreferences() *Preferences {
 		Toolbar: ToolbarPreferences{
 			Show: showToolbar,
 		},
+		Sync: SyncPreferences{
+			Mode: SyncModeDisabled,
+		},
 	}
 }
 
@@ -48,6 +51,7 @@ type Preferences struct {
 	TOTP              TOTPPreferences              `json:"totp,omitempty"`
 	Theme             ThemePreferences             `json:"theme,omitempty"`
 	Toolbar           ToolbarPreferences           `json:"toolbar,omitempty"`
+	Sync              SyncPreferences              `json:"sync,omitempty"`
 }
 
 // FaviconDownloaderPreferences represents the preferences for the favicon downloader.
@@ -92,6 +96,20 @@ type ThemePreferences struct {
 
 type ToolbarPreferences struct {
 	Show bool `json:"show"` // Show toolbar (in-app menu bar) - default is false on macOS, true elsewhere
+}
+
+const (
+	SyncModeDisabled = "disabled"
+	SyncModeRelaxed  = "relaxed"
+	SyncModeStrict   = "strict"
+)
+
+type SyncPreferences struct {
+	Mode string `json:"sync_mode"` // "disabled", "relaxed", "strict"
+}
+
+func (p SyncPreferences) IsEnabled() bool {
+	return p.Mode == SyncModeRelaxed || p.Mode == SyncModeStrict
 }
 
 // Predefined colour options for vault themes

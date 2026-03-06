@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"log"
 	"strconv"
 
@@ -11,6 +12,8 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
+
+	usmsync "apps.z7.ai/usm/internal/sync"
 )
 
 func (a *app) makePreferencesView() fyne.CanvasObject {
@@ -21,6 +24,7 @@ func (a *app) makePreferencesView() fyne.CanvasObject {
 			a.makeTOTPPreferencesCard(),
 			a.makeThemePreferencesCard(),
 			a.makeToolbarPreferencesCard(),
+			a.makeSyncPreferencesCard(),
 		),
 	)
 
@@ -215,4 +219,86 @@ func (a *app) makeToolbarPreferencesCard() fyne.CanvasObject {
 		"Toggle visibility of the in-app menu bar",
 		checkbox,
 	)
+}
+
+func (a *app) makeSyncPreferencesCard() fyne.CanvasObject {
+	modeOptions := []string{"Disabled", "Relaxed", "Strict"}
+	modeMap := map[string]string{
+		"Disabled": usm.SyncModeDisabled,
+		"Relaxed":  usm.SyncModeRelaxed,
+		"Strict":   usm.SyncModeStrict,
+	}
+	reverseMap := map[string]string{
+		usm.SyncModeDisabled: "Disabled",
+		usm.SyncModeRelaxed:  "Relaxed",
+		usm.SyncModeStrict:   "Strict",
+	}
+
+	discoveryBtn := widget.NewButton("Open Discovery", func() {
+		a.showDiscoveryView()
+	})
+	discoveryBtn.Importance = widget.HighImportance
+	discoveryBtn.Hide()
+	if a.syncService != nil && a.syncService.IsRunning() {
+		discoveryBtn.Show()
+	}
+
+	modeSelect := widget.NewSelect(modeOptions, func(selected string) {
+		val, ok := modeMap[selected]
+		if !ok {
+			return
+		}
+		a.state.Preferences.Sync.Mode = val
+		a.storePreferences()
+		a.applySyncMode(val, discoveryBtn)
+	})
+	modeSelect.Selected = reverseMap[a.state.Preferences.Sync.Mode]
+
+	form := container.New(layout.NewFormLayout())
+	form.Add(labelWithStyle("Sync Mode"))
+	form.Add(modeSelect)
+
+	return widget.NewCard(
+		"LAN Sync",
+		"Peer discovery over local network",
+		container.NewVBox(form, discoveryBtn),
+	)
+}
+
+// applySyncMode starts or stops the sync service when the user changes the preference
+func (a *app) applySyncMode(mode string, discoveryBtn *widget.Button) {
+	enabled := mode == usm.SyncModeRelaxed || mode == usm.SyncModeStrict
+
+	if enabled && (a.syncService == nil || !a.syncService.IsRunning()) {
+		svc, err := usmsync.NewService(usmsync.ServiceConfig{
+			PeerKeyPath:      a.storage.PeerKeyPath(),
+			TrustedPeersPath: a.storage.TrustedPeersPath(),
+			StorageRoot:      a.storage.Root(),
+			SyncMode:         mode,
+			Storage:          a.storage,
+		})
+		if err != nil {
+			log.Println("Could not create sync service:", err)
+			dialog.ShowError(err, a.win)
+			return
+		}
+		if err := svc.Start(context.Background()); err != nil {
+			log.Println("Could not start sync service:", err)
+			dialog.ShowError(err, a.win)
+			return
+		}
+		a.syncService = svc
+		discoveryBtn.Show()
+		// Rebuild toolbar and menu to include discovery button
+		a.toolbar = a.makeToolbar()
+		a.win.SetMainMenu(a.makeMainMenu())
+	}
+
+	if !enabled && a.syncService != nil && a.syncService.IsRunning() {
+		_ = a.syncService.Stop()
+		a.syncService = nil
+		discoveryBtn.Hide()
+		a.toolbar = a.makeToolbar()
+		a.win.SetMainMenu(a.makeMainMenu())
+	}
 }

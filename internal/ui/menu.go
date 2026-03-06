@@ -18,12 +18,20 @@ func (a *app) makeMainMenu() *fyne.MainMenu {
 	vaultItem := fyne.NewMenuItem("Vault", nil)
 	vaultItem.ChildMenu = fyne.NewMenu("", a.makeMainMenuVaultItems()...)
 
-	fileMenu := fyne.NewMenu("File",
+	fileMenuItems := []*fyne.MenuItem{
 		fyne.NewMenuItem("New Vault", func() {
 			a.showCreateVaultView()
 		}),
 		vaultItem,
 		fyne.NewMenuItemSeparator(),
+	}
+	if a.syncService != nil && a.syncService.IsRunning() {
+		fileMenuItems = append(fileMenuItems, fyne.NewMenuItem("Discovery", func() {
+			a.showDiscoveryView()
+		}))
+		fileMenuItems = append(fileMenuItems, fyne.NewMenuItemSeparator())
+	}
+	fileMenuItems = append(fileMenuItems,
 		fyne.NewMenuItem("Preferences", func() {
 			a.showPreferencesView()
 		}),
@@ -36,6 +44,7 @@ func (a *app) makeMainMenu() *fyne.MainMenu {
 			a.win.Close()
 		}),
 	)
+	fileMenu := fyne.NewMenu("File", fileMenuItems...)
 
 	helpMenu := fyne.NewMenu("Help",
 		fyne.NewMenuItem("About", a.about),
@@ -103,10 +112,9 @@ func (a *app) makeVaultMenu() fyne.CanvasObject {
 							a.state.Modified = time.Now().UTC()
 							_ = a.storage.StoreAppState(a.state)
 
-							a.refreshMenusAfterVaultChange()
 							a.main = a.makeApp()
 							a.showCurrentVaultView()
-							a.refreshSysTray()
+							a.refreshMenusAfterVaultChange()
 						},
 						a.win,
 					).Show()

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var ErrInvalidMessageLenght = errors.New("invalid message lenght")
+var ErrInvalidMessageLength = errors.New("invalid message length")
 
 // validateVaultName rejects vault names that could cause path traversal or are otherwise invalid
 func validateVaultName(name string) error {

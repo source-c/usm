@@ -71,7 +71,12 @@ func (a *Agent) AddSSHKey(key crypto.PrivateKey, comment string) error {
 }
 
 func (a *Agent) Close() error {
-	return nil
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for id := range a.sessions {
+		delete(a.sessions, id)
+	}
+	return a.sshagent.RemoveAll()
 }
 
 /* sshagent.ExtendedAgent implementation */
@@ -135,6 +140,7 @@ func (a *Agent) Extension(extensionType string, contents []byte) ([]byte, error)
 }
 
 func (a *Agent) serveConn(c net.Conn) {
+	defer c.Close()
 	if err := sshagent.ServeAgent(a, c); err != io.EOF {
 		log.Println("Agent client connection ended with error:", err)
 	}

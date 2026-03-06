@@ -120,8 +120,8 @@ func (a *Agent) processSessionRequest(contents []byte) ([]byte, error) {
 		}
 
 		a.mu.Lock()
+		defer a.mu.Unlock()
 		a.sessions[id] = s
-		a.mu.Unlock()
 
 		return []byte(id), nil
 	}

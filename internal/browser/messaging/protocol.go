@@ -96,7 +96,7 @@ func (pm *mux) Handle(w io.Writer, r io.Reader) error {
 func readNativeMessage(r io.Reader) (*Request, error) {
 	var length uint32
 	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
-		return nil, ErrInvalidMessageLenght
+		return nil, ErrInvalidMessageLength
 	}
 
 	req := &Request{}

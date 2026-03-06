@@ -90,6 +90,8 @@ func (cmd *ListCmd) Run(s usm.Storage) error {
 	return nil
 }
 
+var errUnhandledItemType = fmt.Errorf("unhandled item type")
+
 func (cmd *ListCmd) items(s usm.Storage) ([]tree.Node, error) {
 	key, err := loadVaultKey(s, cmd.vaultName)
 	if err != nil {
@@ -121,7 +123,7 @@ func (cmd *ListCmd) items(s usm.Storage) ([]tree.Node, error) {
 		case usm.SSHKeyItemType:
 			sshkeyNode.Child = append(sshkeyNode.Child, tree.Node{Value: v.Name})
 		default:
-			panic("unhandled default case - should never be happening")
+			return nil, fmt.Errorf("%w: %q", errUnhandledItemType, v.Type)
 		}
 	}
 

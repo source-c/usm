@@ -45,6 +45,9 @@ func (m *Manager) newDefaultPreferences() *usm.Preferences {
 		Toolbar: usm.ToolbarPreferences{
 			Show: showToolbar,
 		},
+		Sync: usm.SyncPreferences{
+			Mode: usm.SyncModeDisabled,
+		},
 	}
 }
 
@@ -131,6 +134,13 @@ func (m *Manager) extractPreferences(data map[string]interface{}) *usm.Preferenc
 		}
 	}
 
+	// Extract Sync preferences
+	if sync, ok := data["sync"].(map[string]interface{}); ok {
+		if v, ok := sync["sync_mode"].(string); ok {
+			prefs.Sync.Mode = v
+		}
+	}
+
 	return prefs
 }
 
@@ -168,6 +178,9 @@ func (m *Manager) preferencesToMap(prefs *usm.Preferences) map[string]interface{
 		},
 		"toolbar": map[string]interface{}{
 			"show": prefs.Toolbar.Show,
+		},
+		"sync": map[string]interface{}{
+			"sync_mode": prefs.Sync.Mode,
 		},
 	}
 }

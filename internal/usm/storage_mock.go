@@ -33,6 +33,16 @@ func (*StorageMock) LogFilePath() string {
 	return filepath.Join(os.TempDir(), "usm_log_file_mock")
 }
 
+// PeerKeyPath implements Storage.
+func (c *StorageMock) PeerKeyPath() string {
+	return filepath.Join(os.TempDir(), "usm_peer_key_mock")
+}
+
+// TrustedPeersPath implements Storage.
+func (c *StorageMock) TrustedPeersPath() string {
+	return filepath.Join(os.TempDir(), "usm_trusted_peers_mock")
+}
+
 // Root implements Storage.
 func (c *StorageMock) Root() string {
 	return filepath.Join(os.TempDir(), "usm_root_mock")

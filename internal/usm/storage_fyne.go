@@ -357,6 +357,16 @@ func (s *FyneStorage) LogFilePath() string {
 	return logFilePath(s)
 }
 
+// PeerKeyPath return the peer key file path
+func (s *FyneStorage) PeerKeyPath() string {
+	return peerKeyPath(s)
+}
+
+// TrustedPeersPath return the trusted peers file path
+func (s *FyneStorage) TrustedPeersPath() string {
+	return trustedPeersPath(s)
+}
+
 func (s *FyneStorage) isExist(path string) bool {
 	ok, _ := storage.Exists(storage.NewFileURI(path))
 	return ok

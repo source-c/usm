@@ -25,7 +25,7 @@ type GetAppStateHandlerRequestPayload struct {
 }
 
 type GetAppStateHandlerResponsePayload struct {
-	AppStatate *usm.AppState `json:"app_state"`
+	AppState *usm.AppState `json:"app_state"`
 }
 
 // Serve implements browser.Handler.
@@ -50,8 +50,8 @@ func (h *GetAppStateHandler) Serve(res *Response, req *Request) {
 	}
 
 	if appState.Modified.After(v.Modified) {
-		res.Payload = &GetAppStateHandlerResponsePayload{AppStatate: appState}
+		res.Payload = &GetAppStateHandlerResponsePayload{AppState: appState}
 		return
 	}
-	res.Payload = &GetAppStateHandlerResponsePayload{AppStatate: nil}
+	res.Payload = &GetAppStateHandlerResponsePayload{AppState: nil}
 }

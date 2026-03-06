@@ -9,7 +9,9 @@
 package agent
 
 import (
+	"errors"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -36,9 +38,17 @@ func Run(a *Agent, socketPath string) {
 	}()
 
 	if runtime.GOOS != "windows" {
-		os.Remove(socketPath)
-		if err := os.MkdirAll(filepath.Dir(socketPath), 0o750); err != nil {
+		// ATTN: create socket directory with restrictive permissions (owner-only)
+		if err := os.MkdirAll(filepath.Dir(socketPath), 0o700); err != nil {
 			log.Fatalln("Failed to create UNIX socket folder:", err)
+		}
+		// Remove stale socket only if it exists and is owned by the current user
+		if info, err := os.Lstat(socketPath); err == nil {
+			if info.Mode()&os.ModeSocket != 0 {
+				os.Remove(socketPath)
+			} else {
+				log.Fatalln("Socket path exists but is not a socket:", socketPath)
+			}
 		}
 	}
 
@@ -46,19 +56,23 @@ func Run(a *Agent, socketPath string) {
 	if err != nil {
 		log.Fatalln("Failed to listen on socket:", err)
 	}
+	defer l.Close()
 
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			type temporary interface {
-				Temporary() bool
+			if errors.Is(err, net.ErrClosed) {
+				log.Println("Listener closed, stopping agent")
+				return
 			}
-			if err, ok := err.(temporary); ok && err.Temporary() {
+			var netErr *net.OpError
+			if errors.As(err, &netErr) && netErr.Temporary() {
 				log.Println("Temporary Accept error, sleeping 1s:", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			log.Fatalln("Failed to accept connections:", err)
+			log.Println("Failed to accept connections:", err)
+			return
 		}
 		go a.serveConn(c)
 	}

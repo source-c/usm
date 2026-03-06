@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 
@@ -15,6 +18,8 @@ import (
 	"apps.z7.ai/usm/internal/usm"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+
+	usmsync "apps.z7.ai/usm/internal/sync"
 )
 
 // appType detects the application type from the command line arguments and the runtime
@@ -86,6 +91,13 @@ func main() {
 		return
 	}
 
+	// Clean up any orphaned sync state from interrupted syncs
+	if vaults, vErr := s.Vaults(); vErr == nil {
+		for _, name := range vaults {
+			usmsync.CleanupOrphanedSync(filepath.Join(s.Root(), "storage", name))
+		}
+	}
+
 	// check for running instance looking at the health service
 	if ui.HealthServiceCheck(s.LockFilePath()) {
 		fmt.Fprintln(os.Stderr, "USM GUI is already running")
@@ -93,6 +105,30 @@ func main() {
 	}
 	// start the health service
 	go func() { _, _ = ui.HealthService(s.LockFilePath()) }()
+
+	// Start sync service if enabled in preferences
+	var syncService *usmsync.Service
+	appState, loadErr := s.LoadAppState()
+	if loadErr == nil && appState.Preferences != nil && appState.Preferences.Sync.IsEnabled() {
+		var svcErr error
+		syncService, svcErr = usmsync.NewService(usmsync.ServiceConfig{
+			PeerKeyPath:      s.PeerKeyPath(),
+			TrustedPeersPath: s.TrustedPeersPath(),
+			StorageRoot:      s.Root(),
+			SyncMode:         appState.Preferences.Sync.Mode,
+			Storage:          s,
+		})
+		if svcErr != nil {
+			log.Println("Could not create sync service:", svcErr)
+		}
+		if syncService != nil {
+			go func() {
+				if err := syncService.Start(context.Background()); err != nil {
+					log.Println("Could not start sync service:", err)
+				}
+			}()
+		}
+	}
 
 	// agent could be already running (e.g. from CLI)
 	// if not, start it
@@ -111,7 +147,7 @@ func main() {
 	w := fyneApp.NewWindow(ui.AppTitle)
 	w.SetMaster()
 	w.Resize(fyne.NewSize(400, 600))
-	w.SetContent(ui.MakeApp(s, w))
+	w.SetContent(ui.MakeApp(s, w, syncService))
 
 	// Set up graceful shutdown handler
 	w.SetOnClosed(func() {
@@ -130,6 +166,12 @@ func main() {
 		fyne.Do(func() {
 			fyneApp.Quit()
 		})
+	}()
+
+	defer func() {
+		if syncService != nil {
+			_ = syncService.Stop()
+		}
 	}()
 
 	w.ShowAndRun()

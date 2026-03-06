@@ -18,6 +18,8 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/godbus/dbus/v5"
+
+	usmsync "apps.z7.ai/usm/internal/sync"
 )
 
 const (
@@ -50,9 +52,22 @@ type app struct {
 
 	// Current theme instance for colour customisation
 	currentTheme fyne.Theme
+
+	// Sync service for LAN discovery
+	syncService *usmsync.Service
+
+	// ATTN: sysTrayMenu and prevMenuRefs prevent premature GC of native Cocoa
+	// NSMenu objects. macOS AppKit caches references to menu items internally;
+	// if Go's GC frees the backing fyne.Menu before AppKit releases its cache,
+	// the app crashes with a use-after-free (SIGSEGV or NSInvalidArgumentException).
+	// sysTrayMenu keeps the current systray menu alive; prevMenuRefs keeps the
+	// PREVIOUS generation alive until the next refresh, giving AppKit time to
+	// release its tracking state.
+	sysTrayMenu  *fyne.Menu
+	prevMenuRefs []interface{}
 }
 
-func MakeApp(s usm.Storage, w fyne.Window) fyne.CanvasObject {
+func MakeApp(s usm.Storage, w fyne.Window, syncSvc *usmsync.Service) fyne.CanvasObject {
 	appState, err := s.LoadAppState()
 	if err != nil {
 		dialog.NewError(err, w)
@@ -65,10 +80,17 @@ func MakeApp(s usm.Storage, w fyne.Window) fyne.CanvasObject {
 		unlockedVault: make(map[string]*usm.Vault),
 		win:           w,
 		currentTheme:  theme.DefaultTheme(),
+		syncService:   syncSvc,
 	}
 
 	if err = s.MigrateVaultCatalogue(); err != nil {
 		dialog.NewError(err, w)
+	}
+
+	// Register sync callbacks so incoming requests show appropriate dialogs
+	if syncSvc != nil {
+		syncSvc.SetPairRequestCallback(a.handleIncomingPairRequest)
+		syncSvc.SetSyncNotifyCallback(a.handleIncomingSync)
 	}
 
 	// Apply default theme colour if set
@@ -206,13 +228,14 @@ func (a *app) makeSysTray() {
 	}
 }
 
-// refreshSysTray updates the system tray menu with current vaults
+// refreshSysTray updates the system tray menu with current vaults.
+// ATTN: must be called on the main thread (inside fyne.Do or from a widget callback).
+// Caller must ensure prevMenuRefs holds the old sysTrayMenu to prevent premature GC.
 func (a *app) refreshSysTray() {
 	if desk, ok := fyne.CurrentApp().(desktop.App); ok {
-		// Create simplified menu items for system tray (no shortcuts to avoid macOS issues)
 		menuItems := a.makeSimpleVaultMenuItems()
-		menu := fyne.NewMenu("Vaults", menuItems...)
-		desk.SetSystemTrayMenu(menu)
+		a.sysTrayMenu = fyne.NewMenu("Vaults", menuItems...)
+		desk.SetSystemTrayMenu(a.sysTrayMenu)
 	}
 }
 
@@ -225,12 +248,11 @@ func (a *app) refreshMenusAfterVaultChange() {
 		return
 	}
 
-	// Ensure UI operations run on the main Fyne thread
+	// Ensure UI operations run on the main Fyne thread.
+	// Preserve old menu references to prevent AppKit use-after-free on macOS.
 	fyne.Do(func() {
-		// Update main menu safely
+		a.prevMenuRefs = []interface{}{a.sysTrayMenu}
 		a.win.SetMainMenu(a.makeMainMenu())
-
-		// Update system tray
 		a.refreshSysTray()
 	})
 }
@@ -335,8 +357,18 @@ func (a *app) makeToolbar() fyne.CanvasObject {
 	// Create vault list button with dropdown
 	vaultListBtn := a.makeVaultListButton()
 
-	// Create a toolbar container with vault list on the left and preferences button on the right
-	toolbar := container.NewBorder(nil, nil, vaultListBtn, preferencesBtn, widget.NewLabel(""))
+	// Right side: preferences + optional discovery button
+	rightButtons := container.NewHBox(preferencesBtn)
+	if a.syncService != nil && a.syncService.IsRunning() {
+		discoveryBtn := widget.NewButtonWithIcon("", theme.ComputerIcon(), func() {
+			a.showDiscoveryView()
+		})
+		discoveryBtn.Importance = widget.LowImportance
+		rightButtons = container.NewHBox(discoveryBtn, preferencesBtn)
+	}
+
+	// Create a toolbar container with vault list on the left and buttons on the right
+	toolbar := container.NewBorder(nil, nil, vaultListBtn, rightButtons, widget.NewLabel(""))
 	return toolbar
 }
 
@@ -421,6 +453,50 @@ func (a *app) showPreferencesView() {
 func (a *app) lockVault() {
 	delete(a.unlockedVault, a.vault.Name)
 	a.vault = nil
+}
+
+// reloadStateFromDisk reloads the in-memory app state from the filesystem.
+// ATTN: call this after any operation that changes vault files externally
+// (e.g. sync). It clears all cached vault data and navigates to a safe view.
+func (a *app) reloadStateFromDisk() {
+	appState, err := a.storage.LoadAppState()
+	if err != nil {
+		log.Println("reload state: could not load app state:", err)
+		return
+	}
+	a.state = appState
+
+	// Guard against nil preferences (possible with freshly synced state)
+	if a.state.Preferences == nil {
+		a.state.Preferences = &usm.Preferences{}
+	}
+
+	// Evict all cached vaults — their on-disk content may have changed
+	a.unlockedVault = make(map[string]*usm.Vault)
+	a.vault = nil
+
+	_ = a.storage.MigrateVaultCatalogue()
+
+	// Rebuild toolbar and content — these don't touch native Cocoa menus
+	a.toolbar = a.makeToolbar()
+	a.main = a.makeApp()
+	a.showCurrentVaultView()
+	a.setWindowTitle()
+
+	// ATTN: defer ALL native menu replacement (main menu bar + systray) to a
+	// separate runloop iteration. On macOS, AppKit caches internal references
+	// to NSMenu/NSMenuItem objects for tracking. Replacing menus in the same
+	// pass as SetContent causes use-after-free: the old Cocoa objects are freed
+	// but AppKit still accesses them during the next glfwPollEvents. Keeping
+	// old menu references alive in prevMenuRefs prevents GC from collecting
+	// the backing native objects while AppKit's cache might still point to them.
+	go func() {
+		fyne.Do(func() {
+			a.prevMenuRefs = []interface{}{a.sysTrayMenu}
+			a.win.SetMainMenu(a.makeMainMenu())
+			a.refreshSysTray()
+		})
+	}()
 }
 
 func (a *app) refreshCurrentView() {

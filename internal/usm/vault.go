@@ -100,7 +100,7 @@ func (v *Vault) Range(f func(id string, meta *Metadata) bool) {
 	for _, itemMetadataByType := range v.ItemMetadata {
 		for id, itemMetadata := range itemMetadataByType {
 			if !f(id, itemMetadata) {
-				break
+				return
 			}
 		}
 	}

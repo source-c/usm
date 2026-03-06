@@ -63,7 +63,7 @@ vuln: .build-govulncheck
 
 test:
 	@echo "${GREEN}# Running app tests...${NOCOLOR}"
-	go test --coverprofile=.coverage.out $(GO_TEST_FILES)
+	go test -race --coverprofile=.coverage.out $(GO_TEST_FILES)
 	go tool cover -func=.coverage.out
 
 deps:

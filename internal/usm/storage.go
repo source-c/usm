@@ -11,14 +11,16 @@ import (
 )
 
 const (
-	storageRootName  = "storage"
-	keyFileName      = "key.age"
-	vaultFileName    = "vault.age"
-	appStateFileName = "usm.json"
-	lockFileName     = "usm.lock"
-	logFileName      = "usm.log"
-	socketFileName   = "agent.sock"
-	namedPipe        = `\\.\pipe\usm`
+	storageRootName      = "storage"
+	keyFileName          = "key.age"
+	vaultFileName        = "vault.age"
+	appStateFileName     = "usm.json"
+	lockFileName         = "usm.lock"
+	logFileName          = "usm.log"
+	socketFileName       = "agent.sock"
+	namedPipe            = `\\.\pipe\usm`
+	peerKeyFileName      = "peer.key"
+	trustedPeersFileName = "trusted_peers.json"
 )
 
 type Storage interface {
@@ -29,6 +31,8 @@ type Storage interface {
 	LogStorage
 	SocketAgentPath() string
 	LockFilePath() string
+	PeerKeyPath() string
+	TrustedPeersPath() string
 	MigrateVaultCatalogue() error
 }
 type AppStateStorage interface {
@@ -107,6 +111,14 @@ func lockFilePath(s Storage) string {
 
 func logFilePath(s Storage) string {
 	return filepath.Join(s.Root(), logFileName)
+}
+
+func peerKeyPath(s Storage) string {
+	return filepath.Join(s.Root(), peerKeyFileName)
+}
+
+func trustedPeersPath(s Storage) string {
+	return filepath.Join(s.Root(), trustedPeersFileName)
 }
 
 // generateUUID returns a new random UUID v4 string

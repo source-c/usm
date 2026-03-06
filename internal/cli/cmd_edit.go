@@ -85,17 +85,21 @@ func (cmd *EditCmd) Run(s usm.Storage) error {
 		return err
 	}
 
+	var editErr error
 	switch cmd.itemType {
 	case usm.LoginItemType:
-		_ = cmd.editLoginItem(vault.Key(), item)
+		editErr = cmd.editLoginItem(vault.Key(), item)
 	case usm.NoteItemType:
-		_ = cmd.editNoteItem(item)
+		editErr = cmd.editNoteItem(item)
 	case usm.PasswordItemType:
-		_ = cmd.editPasswordItem(vault.Key(), item)
+		editErr = cmd.editPasswordItem(vault.Key(), item)
 	case usm.SSHKeyItemType:
-		_ = cmd.editSSHKeyItem(item)
+		editErr = cmd.editSSHKeyItem(item)
 	default:
 		return fmt.Errorf("unsupported item type: %q", cmd.itemType)
+	}
+	if editErr != nil {
+		return fmt.Errorf("failed to edit item: %w", editErr)
 	}
 
 	now := time.Now().UTC()

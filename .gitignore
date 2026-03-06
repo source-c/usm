@@ -8,3 +8,7 @@
 /.claude
 /.opencode
 /.junie
+/tmp/
+/__samples__/
+.sync-staging/
+.sync-backup/
