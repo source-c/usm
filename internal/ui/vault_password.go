@@ -83,7 +83,6 @@ func (a *app) showChangePasswordDialog() {
 					if a.state.VaultCatalogue == nil {
 						a.state.VaultCatalogue = make(map[string]*usm.VaultEntry)
 					}
-					usm.IncrementVaultVersion(a.state.VaultCatalogue, newVault.Name)
 					usm.UpdateVaultCatalogue(a.state.VaultCatalogue, newVault, a.storage)
 					a.state.Modified = time.Now().UTC()
 					if err := a.storage.StoreAppState(a.state); err != nil {

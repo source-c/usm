@@ -20,6 +20,8 @@ func UpdateVaultCatalogue(catalogue map[string]*VaultEntry, vault *Vault, storag
 			entry.Created = time.Now().UTC()
 		}
 		catalogue[vault.Name] = entry
+	} else if !vault.Modified.IsZero() && !entry.Modified.Equal(vault.Modified) {
+		entry.Version++
 	}
 
 	entry.KeyFingerprint = vault.Key().Fingerprint()
@@ -28,19 +30,4 @@ func UpdateVaultCatalogue(catalogue map[string]*VaultEntry, vault *Vault, storag
 		entry.Modified = time.Now().UTC()
 	}
 	entry.ItemCount = vault.Size()
-}
-
-// IncrementVaultVersion increases the stored version counter for a vault in the catalogue
-func IncrementVaultVersion(catalogue map[string]*VaultEntry, vaultName string) {
-	if catalogue == nil {
-		return
-	}
-
-	entry, ok := catalogue[vaultName]
-	if !ok {
-		return
-	}
-
-	entry.Version++
-	entry.Modified = time.Now().UTC()
 }

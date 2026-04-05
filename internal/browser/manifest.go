@@ -14,7 +14,7 @@ const (
 	osDarwin  = "darwin"
 	osWindows = "windows"
 
-	firefoxExtensionIDs = `{"usm@apps.z7.ai"}`
+	firefoxExtensionIDs = `["usm@apps.z7.ai"]`
 	firefoxManifestTpl  = `{
 		"name": "USM",
 		"description": "Native manifest for the USM browser extension",
@@ -26,7 +26,7 @@ const (
 )
 
 const (
-	chromeExtensionIDs = `{"chrome-extension://lkncfaojhcgoefgkjpfoniakecdiclof/"}`
+	chromeExtensionIDs = `["chrome-extension://lkncfaojhcgoefgkjpfoniakecdiclof/"]`
 	chromeManifestTpl  = `{
 		"name": "USM",
 		"description": "Native manifest for the USM browser extension",

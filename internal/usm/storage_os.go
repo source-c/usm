@@ -404,6 +404,14 @@ func (s *OSStorage) createFile(name string) (*os.File, error) {
 
 // migrateDeprecatedRootStorage migrates the deprecated 'vaults' storage folder to new one
 func (s *OSStorage) migrateDeprecatedRootStorage() (bool, error) {
+	defaultRoot, err := defaultOSStorageRoot()
+	if err != nil {
+		return false, nil
+	}
+	if filepath.Clean(s.Root()) != filepath.Clean(defaultRoot) {
+		return false, nil
+	}
+
 	oldRoot, err := os.UserConfigDir()
 	if err != nil {
 		return false, nil
@@ -417,6 +425,18 @@ func (s *OSStorage) migrateDeprecatedRootStorage() (bool, error) {
 	dest := storageRootPath(s)
 	err = os.Rename(src, dest)
 	return true, err
+}
+
+func defaultOSStorageRoot() (string, error) {
+	root := os.Getenv(ENV_HOME)
+	if root == "" {
+		var err error
+		root, err = os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+	}
+	return filepath.Join(root, ".usm"), nil
 }
 
 // MigrateVaultCatalogue creates catalogue entries for vaults missing metadata

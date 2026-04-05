@@ -174,7 +174,7 @@ func TestChangeVaultPasswordReencryptsData(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, note.Value, loadedItem.(*Note).Value)
 
-	backupDir := fmt.Sprintf("%s.v1", vaultRootPath(storage, name))
+	backupDir := fmt.Sprintf("%s.v%d", vaultRootPath(storage, name), catalogueVaultVersion(storage, name)-1)
 	info, statErr := os.Stat(backupDir)
 	require.NoError(t, statErr)
 	assert.True(t, info.IsDir())

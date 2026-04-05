@@ -24,15 +24,3 @@ func TestUpdateVaultCatalogueCreatesEntry(t *testing.T) {
 	assert.Equal(t, vault.Size(), entry.ItemCount)
 	assert.Equal(t, key.Fingerprint(), entry.KeyFingerprint)
 }
-
-func TestIncrementVaultVersion(t *testing.T) {
-	catalogue := map[string]*VaultEntry{
-		"vault": {
-			Name:    "vault",
-			Version: 1,
-		},
-	}
-
-	IncrementVaultVersion(catalogue, "vault")
-	assert.Equal(t, 2, catalogue["vault"].Version)
-}

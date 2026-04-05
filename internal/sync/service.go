@@ -71,6 +71,7 @@ type Service struct {
 	trustStore     *TrustStore
 	running        bool
 	done           chan struct{} // signals background loop to stop
+	backgroundWG   sync.WaitGroup
 	onPairRequest  PairRequestCallback
 	onIncomingSync SyncNotifyCallback
 }
@@ -140,8 +141,10 @@ func (s *Service) Start(_ context.Context) error {
 
 	// ATTN: background loop handles mDNS restart (recovers from sleep/network
 	// changes) and peer list sweeping (removes peers not re-discovered in time).
-	s.done = make(chan struct{})
-	go s.backgroundLoop()
+	done := make(chan struct{})
+	s.done = done
+	s.backgroundWG.Add(1)
+	go s.backgroundLoop(done)
 
 	s.running = true
 	return nil
@@ -150,36 +153,43 @@ func (s *Service) Start(_ context.Context) error {
 // Stop tears down the libp2p host and mDNS service
 func (s *Service) Stop() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if !s.running {
+		s.mu.Unlock()
 		return nil
 	}
 
-	// Signal background loop to exit
-	if s.done != nil {
-		close(s.done)
-		s.done = nil
-	}
-
-	if s.mdnsSvc != nil {
-		_ = s.mdnsSvc.Close()
-		s.mdnsSvc = nil
-	}
-
-	if s.host != nil {
-		_ = s.host.Close()
-		s.host = nil
-	}
+	done := s.done
+	mdnsSvc := s.mdnsSvc
+	h := s.host
 
 	s.running = false
+	s.done = nil
+	s.mdnsSvc = nil
+	s.host = nil
+	s.mu.Unlock()
+
+	if done != nil {
+		close(done)
+	}
+	s.backgroundWG.Wait()
+
+	if mdnsSvc != nil {
+		_ = mdnsSvc.Close()
+	}
+
+	if h != nil {
+		_ = h.Close()
+	}
+
 	return nil
 }
 
 // backgroundLoop periodically sweeps stale peers and restarts mDNS to recover
 // from network changes (sleep, WiFi reconnect, IP change). It runs until the
 // done channel is closed by Stop().
-func (s *Service) backgroundLoop() {
+func (s *Service) backgroundLoop(done <-chan struct{}) {
+	defer s.backgroundWG.Done()
+
 	sweepTicker := time.NewTicker(peerSweepInterval)
 	mdnsTicker := time.NewTicker(mdnsRestartInterval)
 	defer sweepTicker.Stop()
@@ -187,7 +197,7 @@ func (s *Service) backgroundLoop() {
 
 	for {
 		select {
-		case <-s.done:
+		case <-done:
 			return
 		case <-sweepTicker.C:
 			s.peerList.Sweep(peerMaxAge)
@@ -563,6 +573,9 @@ func (s *Service) SyncWithPeer(ctx context.Context, peerID string) (*SyncResult,
 				result.Errors = append(result.Errors, fmt.Sprintf("pull %s: %v", t.VaultName, err))
 				continue
 			}
+			if err := updateCatalogueAfterReceive(storage, remoteCat.VaultCatalogue, t.VaultName); err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("catalogue update %s: %v", t.VaultName, err))
+			}
 			result.Transfers = append(result.Transfers, t)
 		}
 	}
@@ -664,12 +677,15 @@ func (s *Service) handleSyncStream(stream network.Stream) {
 		log.Printf("sync: %v", syncErr)
 		return
 	}
-
 	// Execute: receive pushed vaults (initiator pushes, we receive)
 	for _, t := range plan.Auto {
 		if t.Direction == SyncDirectionPush {
 			if err := receiveVault(dec, storage, t.VaultName); err != nil {
 				log.Printf("sync: receive %s failed: %v", t.VaultName, err)
+				continue
+			}
+			if err := updateCatalogueAfterReceive(storage, remoteCat.VaultCatalogue, t.VaultName); err != nil {
+				log.Printf("sync: catalogue update %s: %v", t.VaultName, err)
 			}
 		}
 	}
@@ -683,12 +699,49 @@ func (s *Service) handleSyncStream(stream network.Stream) {
 		}
 	}
 
-	// Wait for completion
+	// Wait for completion signal from initiator
 	var completeMsg Message
 	_ = dec.Decode(&completeMsg)
 
 	_ = s.trustStore.UpdateLastSync(peerID, time.Now())
 	log.Printf("sync: completed with %s", peerID)
+}
+
+// updateCatalogueAfterReceive writes the remote vault entry's metadata into the local
+// catalogue so that subsequent syncs see the vault as up-to-date rather than stale.
+func updateCatalogueAfterReceive(storage usm.Storage, remoteCatalogue map[string]*usm.VaultEntry, vaultName string) error {
+	remoteEntry, ok := remoteCatalogue[vaultName]
+	if !ok {
+		return fmt.Errorf("vault %q not found in remote catalogue", vaultName)
+	}
+
+	appState, err := storage.LoadAppState()
+	if err != nil {
+		return fmt.Errorf("could not load app state: %w", err)
+	}
+	if appState.VaultCatalogue == nil {
+		appState.VaultCatalogue = make(map[string]*usm.VaultEntry)
+	}
+
+	entry := appState.VaultCatalogue[vaultName]
+	if entry == nil {
+		entry = &usm.VaultEntry{
+			Name:            vaultName,
+			StorageLocation: filepath.Join(storage.Root(), "storage", vaultName),
+			Created:         remoteEntry.Created,
+		}
+		appState.VaultCatalogue[vaultName] = entry
+	}
+
+	entry.Version = remoteEntry.Version
+	entry.KeyFingerprint = remoteEntry.KeyFingerprint
+	entry.Modified = remoteEntry.Modified
+	entry.ItemCount = remoteEntry.ItemCount
+	appState.Modified = time.Now().UTC()
+	if err := storage.StoreAppState(appState); err != nil {
+		return fmt.Errorf("could not store app state: %w", err)
+	}
+	return nil
 }
 
 // loadCatalogue reads the vault catalogue from storage

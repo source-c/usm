@@ -41,7 +41,7 @@ func TestWriteNativeManifests(t *testing.T) {
 	t.Run("firefox", func(t *testing.T) {
 		err := WriteNativeManifests()
 		require.NoError(t, err)
-		locations, err := chromeNativeManifestLocations()
+		locations, err := firefoxNativeManifestLocations()
 		require.NoError(t, err)
 		for _, location := range locations {
 			assert.FileExists(t, location)

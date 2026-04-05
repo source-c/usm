@@ -1,9 +1,11 @@
 package agent_test
 
 import (
+	"context"
 	"log"
+	"net"
 	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,13 +16,23 @@ import (
 )
 
 func Test_Client(t *testing.T) {
-	root := filepath.Join(os.TempDir(), t.Name())
-	t.Cleanup(func() {
-		os.RemoveAll(root)
-	})
+	root := t.TempDir()
 
 	s, err := usm.NewOSStorageRooted(root)
 	require.NoError(t, err)
+
+	var lc net.ListenConfig
+	listener, err := lc.Listen(context.Background(), "unix", s.SocketAgentPath())
+	if err != nil {
+		if strings.Contains(err.Error(), "operation not permitted") {
+			t.Skip(err)
+		}
+		require.NoError(t, err)
+	}
+	require.NoError(t, listener.Close())
+	if err := os.Remove(s.SocketAgentPath()); err != nil && !os.IsNotExist(err) {
+		require.NoError(t, err)
+	}
 
 	server := agent.NewCLI()
 	defer server.Close()

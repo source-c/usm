@@ -18,7 +18,8 @@ type AppState struct {
 type VaultEntry struct {
 	// Name is the vault identifier and directory name
 	Name string `json:"name"`
-	// Version is incremented for every password rotation (Copy-on-Write generation)
+	// Version is a monotonic counter incremented on every vault modification (item add/edit/delete,
+	// password rotation, colour change). Used by sync negotiation to determine which side is newer.
 	Version int `json:"version"`
 	// StorageLocation is the absolute path holding the vault payload
 	StorageLocation string `json:"storage_location"`

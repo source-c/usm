@@ -4,5 +4,5 @@ Website = "https://apps.z7.ai/usm-go"
   Icon = "logo/usm.png"
   Name = "USM"
   ID = "ai.z7.apps.usm"
-  Version = "1.1.1"
+  Version = "1.1.2"
   Build = 1
