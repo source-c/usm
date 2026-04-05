@@ -1,14 +1,22 @@
 package usm
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"path/filepath"
 	"runtime"
 	"time"
 )
+
+// CatalogueObserver is notified after every local vault catalogue mutation so that
+// external stores (e.g. the Viracochan chain) stay in sync with usm.json.
+type CatalogueObserver interface {
+	OnCatalogueUpdate(ctx context.Context, vault *Vault, storage Storage) error
+}
 
 const (
 	storageRootName      = "storage"
@@ -215,6 +223,13 @@ func catalogueVaultVersion(storage Storage, vaultName string) int {
 	return 1
 }
 
+// catalogueObserverProvider is satisfied by storage implementations that carry
+// an optional CatalogueObserver (e.g. OSStorage). Using a local interface avoids
+// polluting the public Storage contract.
+type catalogueObserverProvider interface {
+	GetCatalogueObserver() CatalogueObserver
+}
+
 func persistVaultCatalogue(storage Storage, vault *Vault, mutate func(entry *VaultEntry)) error {
 	if vault == nil || vault.Name == "" {
 		return fmt.Errorf("vault is required to update catalogue")
@@ -240,6 +255,17 @@ func persistVaultCatalogue(storage Storage, vault *Vault, mutate func(entry *Vau
 	appState.Modified = time.Now().UTC()
 	if err := storage.StoreAppState(appState); err != nil {
 		return fmt.Errorf("could not store app state: %w", err)
+	}
+
+	// ATTN: notify the catalogue observer (Viracochan chain) so that the sync
+	// negotiation sees up-to-date metadata. Failure is logged but not fatal —
+	// usm.json is already persisted as the primary source of truth.
+	if p, ok := storage.(catalogueObserverProvider); ok {
+		if obs := p.GetCatalogueObserver(); obs != nil {
+			if err := obs.OnCatalogueUpdate(context.Background(), vault, storage); err != nil {
+				log.Printf("catalogue observer: %v", err)
+			}
+		}
 	}
 
 	return nil

@@ -148,6 +148,14 @@ func (cm *CatalogueManager) configExists(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// OnCatalogueUpdate satisfies usm.CatalogueObserver so the manager can be
+// wired as a post-mutation hook on OSStorage, keeping the Viracochan chain
+// in sync with every local vault change.
+func (cm *CatalogueManager) OnCatalogueUpdate(ctx context.Context, vault *usm.Vault, storage usm.Storage) error {
+	_, err := cm.UpdateVaultEntry(ctx, vault, storage)
+	return err
+}
+
 // ConfigDir returns the Viracochan config directory path for the given storage root.
 func ConfigDir(storageRoot string) string {
 	return filepath.Join(storageRoot, "config")

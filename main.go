@@ -122,6 +122,12 @@ func main() {
 			if err := catMgr.MigrateFromLegacy(ctx, appState.VaultCatalogue); err != nil {
 				log.Println("Could not migrate catalogue to Viracochan:", err)
 			}
+			// ATTN: wire the Viracochan manager as a catalogue observer so that
+			// every local vault mutation (add/edit/delete item, password change)
+			// updates the chain. Without this, sync negotiation uses stale metadata.
+			if osStorage, ok := s.(*usm.OSStorage); ok {
+				osStorage.SetCatalogueObserver(catMgr)
+			}
 		}
 
 		var svcErr error

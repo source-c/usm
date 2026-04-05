@@ -13,7 +13,19 @@ import (
 var _ Storage = (*OSStorage)(nil)
 
 type OSStorage struct {
-	root string
+	root              string
+	catalogueObserver CatalogueObserver
+}
+
+// SetCatalogueObserver registers an observer that is called after every local
+// vault catalogue mutation (e.g. to keep the Viracochan chain in sync).
+func (s *OSStorage) SetCatalogueObserver(obs CatalogueObserver) {
+	s.catalogueObserver = obs
+}
+
+// GetCatalogueObserver returns the registered observer, or nil.
+func (s *OSStorage) GetCatalogueObserver() CatalogueObserver {
+	return s.catalogueObserver
 }
 
 // NewOSStorage returns an OS Storage implementation rooted at os.UserConfigDir()
