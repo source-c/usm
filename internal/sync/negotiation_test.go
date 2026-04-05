@@ -240,3 +240,63 @@ func TestVerifyPlanConsistency_MatchingConflicts(t *testing.T) {
 	}
 	assert.NoError(t, VerifyPlanConsistency(initiator, responder))
 }
+
+func TestNegotiate_ChainCS_MatchingChecksum_Skips(t *testing.T) {
+	now := time.Now().UTC()
+	// Different versions and timestamps, but matching ChainCS → provably in sync
+	local := map[string]*usm.VaultEntry{
+		"vault1": {Name: "vault1", Version: 3, Modified: now, ChainCS: "sha256:abc123"},
+	}
+	remote := map[string]*usm.VaultEntry{
+		"vault1": {Name: "vault1", Version: 5, Modified: now.Add(time.Hour), ChainCS: "sha256:abc123"},
+	}
+	plan := Negotiate(local, remote)
+
+	assert.Empty(t, plan.Auto, "matching ChainCS should skip regardless of version/timestamp")
+	assert.Empty(t, plan.Conflicts, "matching ChainCS should not conflict")
+}
+
+func TestNegotiate_ChainCS_DifferentChecksum_VersionWins(t *testing.T) {
+	now := time.Now().UTC()
+	// Both have ChainCS but they differ → fall back to version comparison
+	local := map[string]*usm.VaultEntry{
+		"vault1": {Name: "vault1", Version: 3, Modified: now, ChainCS: "sha256:aaa"},
+	}
+	remote := map[string]*usm.VaultEntry{
+		"vault1": {Name: "vault1", Version: 5, Modified: now, ChainCS: "sha256:bbb"},
+	}
+	plan := Negotiate(local, remote)
+
+	assert.Len(t, plan.Auto, 1)
+	assert.Equal(t, SyncDirectionPull, plan.Auto[0].Direction)
+}
+
+func TestNegotiate_ChainCS_EmptyOnOneSide_Fallback(t *testing.T) {
+	now := time.Now().UTC()
+	// Only one side has ChainCS → fall back to version/timestamp comparison
+	local := map[string]*usm.VaultEntry{
+		"vault1": {Name: "vault1", Version: 3, Modified: now, ChainCS: "sha256:aaa"},
+	}
+	remote := map[string]*usm.VaultEntry{
+		"vault1": {Name: "vault1", Version: 3, Modified: now}, // no ChainCS
+	}
+	plan := Negotiate(local, remote)
+
+	assert.Empty(t, plan.Auto)
+	assert.Empty(t, plan.Conflicts)
+}
+
+func TestNegotiate_ChainCS_PreventsConflict(t *testing.T) {
+	now := time.Now().UTC()
+	// Same version but different timestamps → would be a conflict, but matching ChainCS prevents it
+	local := map[string]*usm.VaultEntry{
+		"vault1": {Name: "vault1", Version: 3, Modified: now, ChainCS: "sha256:same"},
+	}
+	remote := map[string]*usm.VaultEntry{
+		"vault1": {Name: "vault1", Version: 3, Modified: now.Add(time.Minute), ChainCS: "sha256:same"},
+	}
+	plan := Negotiate(local, remote)
+
+	assert.Empty(t, plan.Auto)
+	assert.Empty(t, plan.Conflicts, "matching ChainCS should prevent conflict despite different timestamps")
+}

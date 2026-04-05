@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"apps.z7.ai/usm/internal/config"
 	"apps.z7.ai/usm/internal/usm"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -25,9 +26,10 @@ import (
 type ServiceConfig struct {
 	PeerKeyPath      string
 	TrustedPeersPath string
-	StorageRoot      string      // usm storage root for vault paths
-	SyncMode         string      // "disabled", "relaxed", "strict"
-	Storage          usm.Storage // for catalogue and vault file access
+	StorageRoot      string                   // usm storage root for vault paths
+	SyncMode         string                   // "disabled", "relaxed", "strict"
+	Storage          usm.Storage              // for catalogue and vault file access
+	CatalogueMgr     *config.CatalogueManager // optional: when set, catalogue goes through Viracochan
 }
 
 // PairRequestCallback is called when a remote peer initiates pairing.
@@ -516,7 +518,7 @@ func (s *Service) SyncWithPeer(ctx context.Context, peerID string) (*SyncResult,
 	dec := json.NewDecoder(stream)
 
 	// Load local catalogue
-	localCatalogue, err := loadCatalogue(storage)
+	localCatalogue, err := loadCatalogue(storage, s.config.CatalogueMgr)
 	if err != nil {
 		return nil, fmt.Errorf("could not load catalogue: %w", err)
 	}
@@ -573,7 +575,7 @@ func (s *Service) SyncWithPeer(ctx context.Context, peerID string) (*SyncResult,
 				result.Errors = append(result.Errors, fmt.Sprintf("pull %s: %v", t.VaultName, err))
 				continue
 			}
-			if err := updateCatalogueAfterReceive(storage, remoteCat.VaultCatalogue, t.VaultName); err != nil {
+			if err := updateCatalogueAfterReceive(storage, s.config.CatalogueMgr, remoteCat.VaultCatalogue, t.VaultName); err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("catalogue update %s: %v", t.VaultName, err))
 			}
 			result.Transfers = append(result.Transfers, t)
@@ -638,7 +640,7 @@ func (s *Service) handleSyncStream(stream network.Stream) {
 	}
 
 	// Send our catalogue
-	localCatalogue, err := loadCatalogue(storage)
+	localCatalogue, err := loadCatalogue(storage, s.config.CatalogueMgr)
 	if err != nil {
 		syncErr = fmt.Errorf("could not load catalogue: %w", err)
 		log.Printf("sync: %v", syncErr)
@@ -684,7 +686,7 @@ func (s *Service) handleSyncStream(stream network.Stream) {
 				log.Printf("sync: receive %s failed: %v", t.VaultName, err)
 				continue
 			}
-			if err := updateCatalogueAfterReceive(storage, remoteCat.VaultCatalogue, t.VaultName); err != nil {
+			if err := updateCatalogueAfterReceive(storage, s.config.CatalogueMgr, remoteCat.VaultCatalogue, t.VaultName); err != nil {
 				log.Printf("sync: catalogue update %s: %v", t.VaultName, err)
 			}
 		}
@@ -709,12 +711,45 @@ func (s *Service) handleSyncStream(stream network.Stream) {
 
 // updateCatalogueAfterReceive writes the remote vault entry's metadata into the local
 // catalogue so that subsequent syncs see the vault as up-to-date rather than stale.
-func updateCatalogueAfterReceive(storage usm.Storage, remoteCatalogue map[string]*usm.VaultEntry, vaultName string) error {
+// When a CatalogueManager is provided the update goes through the Viracochan chain,
+// which provides integrity-checked versioning and bypasses the legacy mergeExistingCatalogue.
+func updateCatalogueAfterReceive(storage usm.Storage, catMgr *config.CatalogueManager, remoteCatalogue map[string]*usm.VaultEntry, vaultName string) error {
 	remoteEntry, ok := remoteCatalogue[vaultName]
 	if !ok {
 		return fmt.Errorf("vault %q not found in remote catalogue", vaultName)
 	}
 
+	if catMgr != nil {
+		ctx := context.Background()
+		catalogue, err := catMgr.LoadCatalogue(ctx)
+		if err != nil {
+			return fmt.Errorf("could not load catalogue: %w", err)
+		}
+
+		entry := catalogue[vaultName]
+		if entry == nil {
+			entry = &usm.VaultEntry{
+				Name:            vaultName,
+				StorageLocation: filepath.Join(storage.Root(), "storage", vaultName),
+				Created:         remoteEntry.Created,
+			}
+			catalogue[vaultName] = entry
+		}
+
+		entry.Version = remoteEntry.Version
+		entry.ChainCS = remoteEntry.ChainCS
+		entry.KeyFingerprint = remoteEntry.KeyFingerprint
+		entry.Modified = remoteEntry.Modified
+		entry.ItemCount = remoteEntry.ItemCount
+
+		_, storeErr := catMgr.StoreCatalogue(ctx, catalogue)
+		if storeErr != nil {
+			return fmt.Errorf("could not store catalogue: %w", storeErr)
+		}
+		return nil
+	}
+
+	// Legacy path: update through usm.json
 	appState, err := storage.LoadAppState()
 	if err != nil {
 		return fmt.Errorf("could not load app state: %w", err)
@@ -744,8 +779,11 @@ func updateCatalogueAfterReceive(storage usm.Storage, remoteCatalogue map[string
 	return nil
 }
 
-// loadCatalogue reads the vault catalogue from storage
-func loadCatalogue(storage usm.Storage) (map[string]*usm.VaultEntry, error) {
+// loadCatalogue reads the vault catalogue from storage or the Viracochan CatalogueManager
+func loadCatalogue(storage usm.Storage, catMgr *config.CatalogueManager) (map[string]*usm.VaultEntry, error) {
+	if catMgr != nil {
+		return catMgr.LoadCatalogue(context.Background())
+	}
 	appState, err := storage.LoadAppState()
 	if err != nil {
 		return nil, err

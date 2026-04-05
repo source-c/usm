@@ -33,4 +33,8 @@ type VaultEntry struct {
 	LastUnlocked time.Time `json:"last_unlocked,omitempty"`
 	// ItemCount caches how many items were present the last time the catalogue was refreshed
 	ItemCount int `json:"item_count"`
+	// ChainCS is the SHA-256 checksum of the Viracochan catalogue chain at the time this entry was
+	// last modified. Empty for entries created before Viracochan integration. When present on both
+	// sides of a sync negotiation, matching checksums prove identical catalogue state.
+	ChainCS string `json:"chain_cs,omitempty"`
 }

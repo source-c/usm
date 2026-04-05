@@ -159,7 +159,13 @@ func flipDirection(d SyncDirection) SyncDirection {
 }
 
 // compareEntries determines whether a vault needs to be pushed or pulled based on version comparison.
+// When both sides carry a ChainCS checksum, matching checksums prove identical catalogue state and
+// the vault is skipped regardless of version/timestamp values.
 func compareEntries(name string, local, remote *usm.VaultEntry) *VaultTransfer {
+	if local.ChainCS != "" && remote.ChainCS != "" && local.ChainCS == remote.ChainCS {
+		return nil
+	}
+
 	if local.Version == remote.Version && local.Modified.Equal(remote.Modified) {
 		return nil
 	}
@@ -175,9 +181,31 @@ func compareEntries(name string, local, remote *usm.VaultEntry) *VaultTransfer {
 }
 
 // detectConflict identifies cases where both sides have the same version but different modification timestamps.
+// Matching ChainCS checksums override the conflict — the catalogue state is provably identical.
 func detectConflict(name string, local, remote *usm.VaultEntry) *VaultConflict {
 	if local.Version != remote.Version {
 		return nil
+	}
+	if local.ChainCS != "" && remote.ChainCS != "" && local.ChainCS == remote.ChainCS {
+		return nil
+	}
+	if local.ChainCS != "" && remote.ChainCS != "" && local.ChainCS != remote.ChainCS {
+		return &VaultConflict{
+			VaultName:      name,
+			LocalVersion:   local.Version,
+			RemoteVersion:  remote.Version,
+			LocalModified:  local.Modified.Unix(),
+			RemoteModified: remote.Modified.Unix(),
+		}
+	}
+	if local.ItemCount != remote.ItemCount {
+		return &VaultConflict{
+			VaultName:      name,
+			LocalVersion:   local.Version,
+			RemoteVersion:  remote.Version,
+			LocalModified:  local.Modified.Unix(),
+			RemoteModified: remote.Modified.Unix(),
+		}
 	}
 	if local.Modified.Equal(remote.Modified) {
 		return nil

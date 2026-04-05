@@ -117,7 +117,7 @@ func TestUpdateCatalogueAfterReceive_UpdatesExistingEntry(t *testing.T) {
 		},
 	}
 
-	err := updateCatalogueAfterReceive(&storage, remoteCat, "vault1")
+	err := updateCatalogueAfterReceive(&storage, nil, remoteCat, "vault1")
 	require.NoError(t, err)
 	require.NotNil(t, stored)
 
@@ -155,7 +155,7 @@ func TestUpdateCatalogueAfterReceive_CreatesNewEntry(t *testing.T) {
 		},
 	}
 
-	err := updateCatalogueAfterReceive(&storage, remoteCat, "new-vault")
+	err := updateCatalogueAfterReceive(&storage, nil, remoteCat, "new-vault")
 	require.NoError(t, err)
 	require.NotNil(t, stored)
 
@@ -179,7 +179,7 @@ func TestUpdateCatalogueAfterReceive_MissingRemoteEntry(t *testing.T) {
 
 	remoteCat := map[string]*usm.VaultEntry{}
 
-	err := updateCatalogueAfterReceive(storage, remoteCat, "missing")
+	err := updateCatalogueAfterReceive(storage, nil, remoteCat, "missing")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found in remote catalogue")
 }
@@ -197,7 +197,7 @@ func TestUpdateCatalogueAfterReceive_LoadError(t *testing.T) {
 		"vault1": {Name: "vault1", Version: 2},
 	}
 
-	err := updateCatalogueAfterReceive(storage, remoteCat, "vault1")
+	err := updateCatalogueAfterReceive(storage, nil, remoteCat, "vault1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "could not load app state")
 }
@@ -222,7 +222,7 @@ func TestUpdateCatalogueAfterReceive_StoreError(t *testing.T) {
 		"vault1": {Name: "vault1", Version: 5},
 	}
 
-	err := updateCatalogueAfterReceive(storage, remoteCat, "vault1")
+	err := updateCatalogueAfterReceive(storage, nil, remoteCat, "vault1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "could not store app state")
 }

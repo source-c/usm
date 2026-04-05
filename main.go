@@ -13,6 +13,7 @@ import (
 	"apps.z7.ai/usm/internal/agent"
 	"apps.z7.ai/usm/internal/browser"
 	"apps.z7.ai/usm/internal/cli"
+	"apps.z7.ai/usm/internal/config"
 	"apps.z7.ai/usm/internal/icon"
 	"apps.z7.ai/usm/internal/ui"
 	"apps.z7.ai/usm/internal/usm"
@@ -110,6 +111,19 @@ func main() {
 	var syncService *usmsync.Service
 	appState, loadErr := s.LoadAppState()
 	if loadErr == nil && appState.Preferences != nil && appState.Preferences.Sync.IsEnabled() {
+		// Create or migrate the Viracochan catalogue chain
+		var catMgr *config.CatalogueManager
+		cm, cmErr := config.NewCatalogueManager(config.ConfigDir(s.Root()))
+		if cmErr != nil {
+			log.Println("Could not create catalogue manager:", cmErr)
+		} else {
+			catMgr = cm
+			ctx := context.Background()
+			if err := catMgr.MigrateFromLegacy(ctx, appState.VaultCatalogue); err != nil {
+				log.Println("Could not migrate catalogue to Viracochan:", err)
+			}
+		}
+
 		var svcErr error
 		syncService, svcErr = usmsync.NewService(usmsync.ServiceConfig{
 			PeerKeyPath:      s.PeerKeyPath(),
@@ -117,6 +131,7 @@ func main() {
 			StorageRoot:      s.Root(),
 			SyncMode:         appState.Preferences.Sync.Mode,
 			Storage:          s,
+			CatalogueMgr:     catMgr,
 		})
 		if svcErr != nil {
 			log.Println("Could not create sync service:", svcErr)
