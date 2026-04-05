@@ -6,7 +6,7 @@ GREEN:=\033[0;1;32m
 NOCOLOR:=\033[0m
 
 # GO ENV.
-export GOSUMDB=off
+#export GOSUMDB=off
 export GO111MODULE=on
 export ENV=local
 
