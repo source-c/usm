@@ -32,7 +32,7 @@ linters:
         - name: atomic
         - name: line-length-limit
           arguments:
-            - 150
+            - 160
           severity: error
   exclusions:
     generated: lax
